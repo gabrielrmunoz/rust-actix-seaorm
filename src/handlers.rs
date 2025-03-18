@@ -52,7 +52,7 @@ pub async fn create_user(
     db: web::Data<DbConn>,
     item: web::Json<CreateUserRequest>,
 ) -> impl Responder {
-    info!("Attempting to create user with username: {}", user_id);
+    info!("Attempting to create user with username: {}", item.username);
 
     let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let user = crate::models::ActiveModel {
