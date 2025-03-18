@@ -1,4 +1,3 @@
-use sea_orm::ActiveValue::Set;
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -21,19 +20,3 @@ pub struct Model {
 pub enum Relation {}
 
 impl ActiveModelBehavior for ActiveModel {}
-impl Entity {
-    #[allow(dead_code)]
-    pub fn insert(model: Model) -> ActiveModel {
-        ActiveModel {
-            username: Set(model.username),
-            first_name: Set(model.first_name),
-            last_name: Set(model.last_name),
-            email: Set(model.email),
-            phone: Set(model.phone),
-            created_on: Set(model.created_on),
-            updated_on: Set(model.updated_on),
-            deleted_on: Set(model.deleted_on),
-            ..Default::default()
-        }
-    }
-}
