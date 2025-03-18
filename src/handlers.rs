@@ -3,6 +3,7 @@ use actix_web::{HttpResponse, Responder, web};
 use sea_orm::ActiveValue::Set;
 use sea_orm::EntityTrait;
 use sea_orm::prelude::*;
+use sea_orm::sqlx::types::chrono::Local;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
@@ -50,14 +51,16 @@ pub async fn create_user(
     db: web::Data<DbConn>,
     item: web::Json<CreateUserRequest>,
 ) -> impl Responder {
+    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
     let user = crate::models::ActiveModel {
         username: Set(item.username.clone()),
         first_name: Set(item.first_name.clone()),
         last_name: Set(item.last_name.clone()),
         email: Set(item.email.clone()),
         phone: Set(item.phone.clone()),
-        created_on: Set("2025-03-18 00:00:00".to_string()),
-        updated_on: Set("2025-03-18 00:00:00".to_string()),
+        created_on: Set(now.clone()),
+        updated_on: Set(now.clone()),
         ..Default::default()
     }
     .insert(db.get_ref())
@@ -100,10 +103,8 @@ pub async fn update_user(
                 active_model.phone = Set(Some(phone.clone()));
             }
 
-            // Actualizar la fecha de modificación
-            active_model.updated_on = Set("2025-03-18 00:00:00".to_string());
+            active_model.updated_on = Set(Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
 
-            // Guardar los cambios
             let result = active_model.update(db.get_ref()).await;
 
             match result {
