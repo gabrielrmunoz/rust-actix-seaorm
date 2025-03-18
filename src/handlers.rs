@@ -52,7 +52,7 @@ pub async fn create_user(
     db: web::Data<DbConn>,
     item: web::Json<CreateUserRequest>,
 ) -> impl Responder {
-    info!("Creating user: {}", item.username);
+    info!("Attempting to create user with username: {}", user_id);
 
     let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let user = crate::models::ActiveModel {
@@ -86,6 +86,9 @@ pub async fn update_user(
     item: web::Json<UpdateUserRequest>,
 ) -> impl Responder {
     let user_id = path.into_inner();
+
+    info!("Attempting to update user with ID: {}", user_id);
+
     let user = UserEntity::find_by_id(user_id)
         .one(db.get_ref())
         .await
@@ -134,10 +137,37 @@ pub async fn update_user(
 pub async fn delete_user(db: web::Data<DbConn>, path: web::Path<i32>) -> impl Responder {
     let user_id = path.into_inner();
 
-    let result = UserEntity::delete_by_id(user_id).exec(db.get_ref()).await;
+    info!("Attempting to delete user with ID: {}", user_id);
 
-    match result {
-        Ok(_) => HttpResponse::NoContent().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish(),
+    let user_exists = UserEntity::find_by_id(user_id).one(db.get_ref()).await;
+
+    match user_exists {
+        Ok(Some(_)) => {
+            let result = UserEntity::delete_by_id(user_id).exec(db.get_ref()).await;
+
+            match result {
+                Ok(delete_result) => {
+                    if delete_result.rows_affected > 0 {
+                        info!("User with ID {} successfully deleted", user_id);
+                        HttpResponse::NoContent().finish()
+                    } else {
+                        warn!("User with ID {} was not deleted (0 rows affected)", user_id);
+                        HttpResponse::InternalServerError().finish()
+                    }
+                }
+                Err(err) => {
+                    error!("Error deleting user with ID {}: {}", user_id, err);
+                    HttpResponse::InternalServerError().finish()
+                }
+            }
+        }
+        Ok(None) => {
+            warn!("Attempted to delete non-existent user with ID: {}", user_id);
+            HttpResponse::NotFound().finish()
+        }
+        Err(err) => {
+            error!("Error checking if user with ID {} exists: {}", user_id, err);
+            HttpResponse::InternalServerError().finish()
+        }
     }
 }
