@@ -1,4 +1,4 @@
-use sea_orm::entity::prelude::*;
+use sea_orm::{entity::prelude::*, sqlx::types::chrono::NaiveDateTime};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
@@ -11,9 +11,9 @@ pub struct Model {
     pub last_name: Option<String>,
     pub email: String,
     pub phone: Option<String>,
-    pub created_on: String,
-    pub updated_on: String,
-    pub deleted_on: Option<String>,
+    pub created_on: NaiveDateTime,
+    pub updated_on: NaiveDateTime,
+    pub deleted_on: Option<NaiveDateTime>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

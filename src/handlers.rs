@@ -54,15 +54,15 @@ pub async fn create_user(
 ) -> impl Responder {
     info!("Attempting to create user with username: {}", item.username);
 
-    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let now = Local::now().naive_local();
     let user = crate::models::ActiveModel {
         username: Set(item.username.clone()),
         first_name: Set(item.first_name.clone()),
         last_name: Set(item.last_name.clone()),
         email: Set(item.email.clone()),
         phone: Set(item.phone.clone()),
-        created_on: Set(now.clone()),
-        updated_on: Set(now.clone()),
+        created_on: Set(now),
+        updated_on: Set(now),
         ..Default::default()
     }
     .insert(db.get_ref())
@@ -114,7 +114,7 @@ pub async fn update_user(
                 active_model.phone = Set(Some(phone.clone()));
             }
 
-            active_model.updated_on = Set(Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
+            active_model.updated_on = Set(Local::now().naive_local());
 
             let result = active_model.update(db.get_ref()).await;
 
