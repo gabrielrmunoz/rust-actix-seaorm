@@ -1,5 +1,6 @@
 use crate::models::Entity as UserEntity;
 use actix_web::{HttpResponse, Responder, web};
+use log::{error, info, warn};
 use sea_orm::ActiveValue::Set;
 use sea_orm::EntityTrait;
 use sea_orm::prelude::*;
@@ -51,8 +52,9 @@ pub async fn create_user(
     db: web::Data<DbConn>,
     item: web::Json<CreateUserRequest>,
 ) -> impl Responder {
-    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    info!("Creating user: {}", item.username);
 
+    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let user = crate::models::ActiveModel {
         username: Set(item.username.clone()),
         first_name: Set(item.first_name.clone()),
@@ -67,8 +69,14 @@ pub async fn create_user(
     .await;
 
     match user {
-        Ok(user) => HttpResponse::Created().json(user),
-        Err(_) => HttpResponse::InternalServerError().finish(),
+        Ok(user) => {
+            info!("User created with ID: {}", user.id);
+            HttpResponse::Created().json(user)
+        }
+        Err(err) => {
+            error!("Error creating user: {}", err);
+            HttpResponse::InternalServerError().finish()
+        }
     }
 }
 
@@ -108,8 +116,15 @@ pub async fn update_user(
             let result = active_model.update(db.get_ref()).await;
 
             match result {
-                Ok(updated_user) => HttpResponse::Ok().json(updated_user),
-                Err(_) => HttpResponse::InternalServerError().finish(),
+                Ok(updated_user) => {
+                    info!("User with ID {} updated", user_id);
+                    HttpResponse::Ok().json(updated_user)
+                }
+                Err(err) => {
+                    error!("Error updating user with ID: {}", user_id);
+                    warn!("{}", err);
+                    HttpResponse::InternalServerError().finish()
+                }
             }
         }
         None => HttpResponse::NotFound().finish(),
