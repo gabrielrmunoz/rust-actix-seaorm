@@ -25,8 +25,21 @@ pub struct UpdateUserRequest {
     pub phone: Option<String>,
 }
 
-pub async fn get_users(db: web::Data<DbConn>) -> impl Responder {
-    let users = UserEntity::find()
+#[derive(Deserialize)]
+pub struct GetUsersParams {
+    include_deleted: Option<bool>,
+}
+
+pub async fn get_users(db: web::Data<DbConn>, query: web::Query<GetUsersParams>) -> impl Responder {
+    let include_deleted = query.include_deleted.unwrap_or(false);
+
+    let mut query_builder = UserEntity::find();
+
+    if !include_deleted {
+        query_builder = query_builder.filter(crate::models::Column::DeletedOn.is_null());
+    }
+
+    let users = query_builder
         .all(db.get_ref())
         .await
         .unwrap_or_else(|_| vec![]);
@@ -134,10 +147,10 @@ pub async fn update_user(
     }
 }
 
-pub async fn delete_user(db: web::Data<DbConn>, path: web::Path<i32>) -> impl Responder {
+pub async fn delete_user_physical(db: web::Data<DbConn>, path: web::Path<i32>) -> impl Responder {
     let user_id = path.into_inner();
 
-    info!("Attempting to delete user with ID: {}", user_id);
+    info!("Attempting to physically delete user with ID: {}", user_id);
 
     let user_exists = UserEntity::find_by_id(user_id).one(db.get_ref()).await;
 
@@ -148,7 +161,7 @@ pub async fn delete_user(db: web::Data<DbConn>, path: web::Path<i32>) -> impl Re
             match result {
                 Ok(delete_result) => {
                     if delete_result.rows_affected > 0 {
-                        info!("User with ID {} successfully deleted", user_id);
+                        info!("User with ID {} successfully deleted physically", user_id);
                         HttpResponse::NoContent().finish()
                     } else {
                         warn!("User with ID {} was not deleted (0 rows affected)", user_id);
@@ -156,13 +169,111 @@ pub async fn delete_user(db: web::Data<DbConn>, path: web::Path<i32>) -> impl Re
                     }
                 }
                 Err(err) => {
-                    error!("Error deleting user with ID {}: {}", user_id, err);
+                    error!(
+                        "Error physically deleting user with ID {}: {}",
+                        user_id, err
+                    );
                     HttpResponse::InternalServerError().finish()
                 }
             }
         }
         Ok(None) => {
             warn!("Attempted to delete non-existent user with ID: {}", user_id);
+            HttpResponse::NotFound().finish()
+        }
+        Err(err) => {
+            error!("Error checking if user with ID {} exists: {}", user_id, err);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+pub async fn delete_user_logical(db: web::Data<DbConn>, path: web::Path<i32>) -> impl Responder {
+    let user_id = path.into_inner();
+
+    info!("Attempting to logically delete user with ID: {}", user_id);
+
+    let user = UserEntity::find_by_id(user_id).one(db.get_ref()).await;
+
+    match user {
+        Ok(Some(user)) => {
+            if user.deleted_on.is_some() {
+                warn!("User with ID {} is already logically deleted", user_id);
+                return HttpResponse::BadRequest().json(serde_json::json!({
+                    "error": "User is already marked as deleted"
+                }));
+            }
+
+            let mut active_model: crate::models::ActiveModel = user.into();
+            let now = Local::now().naive_local();
+
+            active_model.deleted_on = Set(Some(now));
+
+            let result = active_model.update(db.get_ref()).await;
+
+            match result {
+                Ok(_) => {
+                    info!("User with ID {} successfully marked as deleted", user_id);
+                    HttpResponse::NoContent().finish()
+                }
+                Err(err) => {
+                    error!("Error marking user with ID {} as deleted: {}", user_id, err);
+                    HttpResponse::InternalServerError().finish()
+                }
+            }
+        }
+        Ok(None) => {
+            warn!(
+                "Attempted to mark non-existent user with ID {} as deleted",
+                user_id
+            );
+            HttpResponse::NotFound().finish()
+        }
+        Err(err) => {
+            error!("Error checking if user with ID {} exists: {}", user_id, err);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+pub async fn restore_user(db: web::Data<DbConn>, path: web::Path<i32>) -> impl Responder {
+    let user_id = path.into_inner();
+
+    info!(
+        "Attempting to restore logically deleted user with ID: {}",
+        user_id
+    );
+
+    let user = UserEntity::find_by_id(user_id).one(db.get_ref()).await;
+
+    match user {
+        Ok(Some(user)) => {
+            if user.deleted_on.is_none() {
+                warn!("User with ID {} is not deleted, cannot restore", user_id);
+                return HttpResponse::BadRequest().json(serde_json::json!({
+                    "error": "User is not marked as deleted"
+                }));
+            }
+
+            let mut active_model: crate::models::ActiveModel = user.into();
+            active_model.deleted_on = Set(None);
+            active_model.updated_on = Set(Local::now().naive_local());
+
+            let result = active_model.update(db.get_ref()).await;
+
+            match result {
+                Ok(_) => {
+                    info!("User with ID {} successfully restored", user_id);
+                    HttpResponse::Ok().finish()
+                }
+                Err(err) => {
+                    error!("Error restoring user with ID {}: {}", user_id, err);
+                    HttpResponse::InternalServerError().finish()
+                }
+            }
+        }
+        Ok(None) => {
+            warn!("Attempted to restore non-existent user with ID {}", user_id);
             HttpResponse::NotFound().finish()
         }
         Err(err) => {
