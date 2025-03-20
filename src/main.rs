@@ -1,19 +1,27 @@
 pub mod api;
+pub mod config;
 pub mod db;
 
 use actix_web::web::ServiceConfig;
 use dotenv::dotenv;
 use sea_orm::{Database, DbConn};
 use shuttle_actix_web::ShuttleActixWeb;
-use std::env;
+
+use crate::config::app_config::AppConfig;
 
 #[shuttle_runtime::main]
 async fn main() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clone + 'static> {
     dotenv().ok();
 
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let app_config = AppConfig::from_env();
 
-    let db: DbConn = Database::connect(&database_url)
+    log::info!(
+        "Starting server at {}:{}",
+        app_config.server.host,
+        app_config.server.port
+    );
+
+    let db: DbConn = Database::connect(&app_config.database.url)
         .await
         .expect("Error connecting to the database");
 
