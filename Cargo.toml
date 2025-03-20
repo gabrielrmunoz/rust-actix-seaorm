@@ -18,3 +18,4 @@ shuttle-actix-web = "0.53.0"
 shuttle-runtime = "0.53.0"
 shuttle-shared-db = "0.53.0"
 tokio = { version = "1.44.1", features = ["full"] }
+validator = { version = "0.20.0", features = ["derive"] }
