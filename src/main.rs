@@ -1,6 +1,5 @@
-mod handlers;
-mod models;
-mod routes;
+pub mod api;
+pub mod db;
 
 use actix_web::web::ServiceConfig;
 use dotenv::dotenv;
@@ -19,7 +18,7 @@ async fn main() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clon
         .expect("Error connecting to the database");
 
     let config = move |cfg: &mut ServiceConfig| {
-        routes::configure_routes(cfg, db.clone());
+        api::configure_routes(cfg, db);
     };
 
     Ok(config.into())

@@ -1,11 +1,25 @@
-use crate::models::Entity as UserEntity;
 use actix_web::{HttpResponse, Responder, web};
 use log::{error, info, warn};
-use sea_orm::ActiveValue::Set;
-use sea_orm::EntityTrait;
-use sea_orm::prelude::*;
 use sea_orm::sqlx::types::chrono::Local;
+use sea_orm::{ActiveValue::Set, DbConn, EntityTrait, prelude::*};
 use serde::{Deserialize, Serialize};
+
+use crate::db::models::{UserActiveModel, UserColumn, UserEntity};
+
+pub fn configure(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/users")
+            .service(web::resource("").get(get_users).post(create_user))
+            .service(
+                web::resource("/{id}")
+                    .get(get_user)
+                    .put(update_user)
+                    .delete(delete_user_physical),
+            )
+            .service(web::resource("/{id}/soft-delete").patch(delete_user_logical))
+            .service(web::resource("/{id}/restore").patch(restore_user)),
+    );
+}
 
 #[derive(Deserialize, Serialize)]
 pub struct CreateUserRequest {
@@ -36,7 +50,7 @@ pub async fn get_users(db: web::Data<DbConn>, query: web::Query<GetUsersParams>)
     let mut query_builder = UserEntity::find();
 
     if !include_deleted {
-        query_builder = query_builder.filter(crate::models::Column::DeletedOn.is_null());
+        query_builder = query_builder.filter(UserColumn::DeletedOn.is_null());
     }
 
     let users = query_builder
@@ -68,7 +82,7 @@ pub async fn create_user(
     info!("Attempting to create user with username: {}", item.username);
 
     let now = Local::now().naive_local();
-    let user = crate::models::ActiveModel {
+    let user = UserActiveModel {
         username: Set(item.username.clone()),
         first_name: Set(item.first_name.clone()),
         last_name: Set(item.last_name.clone()),
@@ -109,7 +123,7 @@ pub async fn update_user(
 
     match user {
         Some(user) => {
-            let mut active_model: crate::models::ActiveModel = user.into();
+            let mut active_model: UserActiveModel = user.into();
 
             if let Some(username) = &item.username {
                 active_model.username = Set(username.clone());
@@ -204,7 +218,7 @@ pub async fn delete_user_logical(db: web::Data<DbConn>, path: web::Path<i32>) ->
                 }));
             }
 
-            let mut active_model: crate::models::ActiveModel = user.into();
+            let mut active_model: UserActiveModel = user.into();
             let now = Local::now().naive_local();
 
             active_model.deleted_on = Set(Some(now));
@@ -255,7 +269,7 @@ pub async fn restore_user(db: web::Data<DbConn>, path: web::Path<i32>) -> impl R
                 }));
             }
 
-            let mut active_model: crate::models::ActiveModel = user.into();
+            let mut active_model: UserActiveModel = user.into();
             active_model.deleted_on = Set(None);
             active_model.updated_on = Set(Local::now().naive_local());
 
