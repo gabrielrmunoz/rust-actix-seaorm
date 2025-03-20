@@ -7,7 +7,7 @@ use dotenv::dotenv;
 use sea_orm::{Database, DbConn};
 use shuttle_actix_web::ShuttleActixWeb;
 
-use crate::config::app_config::AppConfig;
+use crate::config::AppConfig;
 
 #[shuttle_runtime::main]
 async fn main() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clone + 'static> {
