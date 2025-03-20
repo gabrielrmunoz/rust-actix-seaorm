@@ -7,9 +7,11 @@ pub mod error;
 use actix_web::web::ServiceConfig;
 use dotenv::dotenv;
 use sea_orm::{Database, DbConn};
+use sea_orm_migration::MigratorTrait;
 use shuttle_actix_web::ShuttleActixWeb;
 
 use crate::config::AppConfig;
+use crate::db::migrations::Migrator;
 
 #[shuttle_runtime::main]
 async fn main() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clone + 'static> {
@@ -26,6 +28,12 @@ async fn main() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clon
     let db: DbConn = Database::connect(&app_config.database.url)
         .await
         .expect("Error connecting to the database");
+
+    log::info!("Running database migrations...");
+    Migrator::up(&db, None)
+        .await
+        .expect("Failed to run migrations");
+    log::info!("Database migrations completed successfully");
 
     let config = move |cfg: &mut ServiceConfig| {
         api::configure_routes(cfg, db);
