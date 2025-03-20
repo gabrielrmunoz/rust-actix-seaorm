@@ -1,6 +1,7 @@
 pub mod api;
 pub mod config;
 pub mod db;
+pub mod error;
 
 use actix_web::web::ServiceConfig;
 use dotenv::dotenv;

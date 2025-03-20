@@ -1,10 +1,11 @@
-use actix_web::{HttpResponse, Responder, web};
-use log::{error, info, warn};
+use actix_web::{HttpResponse, web};
+use log::{info, warn};
 use sea_orm::sqlx::types::chrono::Local;
 use sea_orm::{ActiveValue::Set, DbConn, EntityTrait, prelude::*};
 use serde::{Deserialize, Serialize};
 
 use crate::db::models::{UserActiveModel, UserColumn, UserEntity};
+use crate::error::AppError;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -44,7 +45,10 @@ pub struct GetUsersParams {
     include_deleted: Option<bool>,
 }
 
-pub async fn get_users(db: web::Data<DbConn>, query: web::Query<GetUsersParams>) -> impl Responder {
+pub async fn get_users(
+    db: web::Data<DbConn>,
+    query: web::Query<GetUsersParams>,
+) -> Result<HttpResponse, AppError> {
     let include_deleted = query.include_deleted.unwrap_or(false);
 
     let mut query_builder = UserEntity::find();
@@ -53,33 +57,41 @@ pub async fn get_users(db: web::Data<DbConn>, query: web::Query<GetUsersParams>)
         query_builder = query_builder.filter(UserColumn::DeletedOn.is_null());
     }
 
-    let users = query_builder
-        .all(db.get_ref())
-        .await
-        .unwrap_or_else(|_| vec![]);
+    let users = query_builder.all(db.get_ref()).await?;
 
-    HttpResponse::Ok().json(users)
+    Ok(HttpResponse::Ok().json(users))
 }
 
-pub async fn get_user(db: web::Data<DbConn>, path: web::Path<i32>) -> impl Responder {
+pub async fn get_user(
+    db: web::Data<DbConn>,
+    path: web::Path<i32>,
+) -> Result<HttpResponse, AppError> {
     let user_id = path.into_inner();
 
-    let user = UserEntity::find_by_id(user_id)
-        .one(db.get_ref())
-        .await
-        .unwrap_or(None);
+    let user = UserEntity::find_by_id(user_id).one(db.get_ref()).await?;
 
     match user {
-        Some(user) => HttpResponse::Ok().json(user),
-        None => HttpResponse::NotFound().finish(),
+        Some(user) => Ok(HttpResponse::Ok().json(user)),
+        None => Err(AppError::NotFound(format!(
+            "User with ID {} not found",
+            user_id
+        ))),
     }
 }
 
 pub async fn create_user(
     db: web::Data<DbConn>,
     item: web::Json<CreateUserRequest>,
-) -> impl Responder {
+) -> Result<HttpResponse, AppError> {
     info!("Attempting to create user with username: {}", item.username);
+
+    if item.username.trim().is_empty() {
+        return Err(AppError::Validation("Username cannot be empty".into()));
+    }
+
+    if item.email.trim().is_empty() {
+        return Err(AppError::Validation("Email cannot be empty".into()));
+    }
 
     let now = Local::now().naive_local();
     let user = UserActiveModel {
@@ -93,33 +105,34 @@ pub async fn create_user(
         ..Default::default()
     }
     .insert(db.get_ref())
-    .await;
+    .await?;
 
-    match user {
-        Ok(user) => {
-            info!("User created with ID: {}", user.id);
-            HttpResponse::Created().json(user)
-        }
-        Err(err) => {
-            error!("Error creating user: {}", err);
-            HttpResponse::InternalServerError().finish()
-        }
-    }
+    info!("User created with ID: {}", user.id);
+    Ok(HttpResponse::Created().json(user))
 }
 
 pub async fn update_user(
     db: web::Data<DbConn>,
     path: web::Path<i32>,
     item: web::Json<UpdateUserRequest>,
-) -> impl Responder {
+) -> Result<HttpResponse, AppError> {
     let user_id = path.into_inner();
 
     info!("Attempting to update user with ID: {}", user_id);
 
-    let user = UserEntity::find_by_id(user_id)
-        .one(db.get_ref())
-        .await
-        .unwrap_or(None);
+    if let Some(ref username) = item.username {
+        if username.trim().is_empty() {
+            return Err(AppError::Validation("Username cannot be empty".into()));
+        }
+    }
+
+    if let Some(ref email) = item.email {
+        if email.trim().is_empty() {
+            return Err(AppError::Validation("Email cannot be empty".into()));
+        }
+    }
+
+    let user = UserEntity::find_by_id(user_id).one(db.get_ref()).await?;
 
     match user {
         Some(user) => {
@@ -143,114 +156,88 @@ pub async fn update_user(
 
             active_model.updated_on = Set(Local::now().naive_local());
 
-            let result = active_model.update(db.get_ref()).await;
+            let updated_user = active_model.update(db.get_ref()).await?;
 
-            match result {
-                Ok(updated_user) => {
-                    info!("User with ID {} updated", user_id);
-                    HttpResponse::Ok().json(updated_user)
-                }
-                Err(err) => {
-                    error!("Error updating user with ID: {}", user_id);
-                    warn!("{}", err);
-                    HttpResponse::InternalServerError().finish()
-                }
-            }
+            info!("User with ID {} updated", user_id);
+            Ok(HttpResponse::Ok().json(updated_user))
         }
-        None => HttpResponse::NotFound().finish(),
+        None => Err(AppError::NotFound(format!(
+            "User with ID {} not found",
+            user_id
+        ))),
     }
 }
 
-pub async fn delete_user_physical(db: web::Data<DbConn>, path: web::Path<i32>) -> impl Responder {
+pub async fn delete_user_physical(
+    db: web::Data<DbConn>,
+    path: web::Path<i32>,
+) -> Result<HttpResponse, AppError> {
     let user_id = path.into_inner();
 
     info!("Attempting to physically delete user with ID: {}", user_id);
 
-    let user_exists = UserEntity::find_by_id(user_id).one(db.get_ref()).await;
+    let user_exists = UserEntity::find_by_id(user_id).one(db.get_ref()).await?;
 
-    match user_exists {
-        Ok(Some(_)) => {
-            let result = UserEntity::delete_by_id(user_id).exec(db.get_ref()).await;
+    if user_exists.is_none() {
+        return Err(AppError::NotFound(format!(
+            "User with ID {} not found",
+            user_id
+        )));
+    }
 
-            match result {
-                Ok(delete_result) => {
-                    if delete_result.rows_affected > 0 {
-                        info!("User with ID {} successfully deleted physically", user_id);
-                        HttpResponse::NoContent().finish()
-                    } else {
-                        warn!("User with ID {} was not deleted (0 rows affected)", user_id);
-                        HttpResponse::InternalServerError().finish()
-                    }
-                }
-                Err(err) => {
-                    error!(
-                        "Error physically deleting user with ID {}: {}",
-                        user_id, err
-                    );
-                    HttpResponse::InternalServerError().finish()
-                }
-            }
-        }
-        Ok(None) => {
-            warn!("Attempted to delete non-existent user with ID: {}", user_id);
-            HttpResponse::NotFound().finish()
-        }
-        Err(err) => {
-            error!("Error checking if user with ID {} exists: {}", user_id, err);
-            HttpResponse::InternalServerError().finish()
-        }
+    let delete_result = UserEntity::delete_by_id(user_id).exec(db.get_ref()).await?;
+
+    if delete_result.rows_affected > 0 {
+        info!("User with ID {} successfully deleted physically", user_id);
+        Ok(HttpResponse::NoContent().finish())
+    } else {
+        warn!("User with ID {} was not deleted (0 rows affected)", user_id);
+        Err(AppError::InternalServerError)
     }
 }
 
-pub async fn delete_user_logical(db: web::Data<DbConn>, path: web::Path<i32>) -> impl Responder {
+pub async fn delete_user_logical(
+    db: web::Data<DbConn>,
+    path: web::Path<i32>,
+) -> Result<HttpResponse, AppError> {
     let user_id = path.into_inner();
 
     info!("Attempting to logically delete user with ID: {}", user_id);
 
-    let user = UserEntity::find_by_id(user_id).one(db.get_ref()).await;
+    let user = UserEntity::find_by_id(user_id).one(db.get_ref()).await?;
 
     match user {
-        Ok(Some(user)) => {
+        Some(user) => {
             if user.deleted_on.is_some() {
                 warn!("User with ID {} is already logically deleted", user_id);
-                return HttpResponse::BadRequest().json(serde_json::json!({
-                    "error": "User is already marked as deleted"
-                }));
+                return Err(AppError::Validation(format!(
+                    "User with ID {} is already marked as deleted",
+                    user_id
+                )));
             }
 
             let mut active_model: UserActiveModel = user.into();
             let now = Local::now().naive_local();
 
             active_model.deleted_on = Set(Some(now));
+            active_model.updated_on = Set(now);
 
-            let result = active_model.update(db.get_ref()).await;
+            active_model.update(db.get_ref()).await?;
 
-            match result {
-                Ok(_) => {
-                    info!("User with ID {} successfully marked as deleted", user_id);
-                    HttpResponse::NoContent().finish()
-                }
-                Err(err) => {
-                    error!("Error marking user with ID {} as deleted: {}", user_id, err);
-                    HttpResponse::InternalServerError().finish()
-                }
-            }
+            info!("User with ID {} successfully marked as deleted", user_id);
+            Ok(HttpResponse::NoContent().finish())
         }
-        Ok(None) => {
-            warn!(
-                "Attempted to mark non-existent user with ID {} as deleted",
-                user_id
-            );
-            HttpResponse::NotFound().finish()
-        }
-        Err(err) => {
-            error!("Error checking if user with ID {} exists: {}", user_id, err);
-            HttpResponse::InternalServerError().finish()
-        }
+        None => Err(AppError::NotFound(format!(
+            "User with ID {} not found",
+            user_id
+        ))),
     }
 }
 
-pub async fn restore_user(db: web::Data<DbConn>, path: web::Path<i32>) -> impl Responder {
+pub async fn restore_user(
+    db: web::Data<DbConn>,
+    path: web::Path<i32>,
+) -> Result<HttpResponse, AppError> {
     let user_id = path.into_inner();
 
     info!(
@@ -258,41 +245,30 @@ pub async fn restore_user(db: web::Data<DbConn>, path: web::Path<i32>) -> impl R
         user_id
     );
 
-    let user = UserEntity::find_by_id(user_id).one(db.get_ref()).await;
+    let user = UserEntity::find_by_id(user_id).one(db.get_ref()).await?;
 
     match user {
-        Ok(Some(user)) => {
+        Some(user) => {
             if user.deleted_on.is_none() {
                 warn!("User with ID {} is not deleted, cannot restore", user_id);
-                return HttpResponse::BadRequest().json(serde_json::json!({
-                    "error": "User is not marked as deleted"
-                }));
+                return Err(AppError::Validation(format!(
+                    "User with ID {} is not marked as deleted",
+                    user_id
+                )));
             }
 
             let mut active_model: UserActiveModel = user.into();
             active_model.deleted_on = Set(None);
             active_model.updated_on = Set(Local::now().naive_local());
 
-            let result = active_model.update(db.get_ref()).await;
+            active_model.update(db.get_ref()).await?;
 
-            match result {
-                Ok(_) => {
-                    info!("User with ID {} successfully restored", user_id);
-                    HttpResponse::Ok().finish()
-                }
-                Err(err) => {
-                    error!("Error restoring user with ID {}: {}", user_id, err);
-                    HttpResponse::InternalServerError().finish()
-                }
-            }
+            info!("User with ID {} successfully restored", user_id);
+            Ok(HttpResponse::NoContent().finish())
         }
-        Ok(None) => {
-            warn!("Attempted to restore non-existent user with ID {}", user_id);
-            HttpResponse::NotFound().finish()
-        }
-        Err(err) => {
-            error!("Error checking if user with ID {} exists: {}", user_id, err);
-            HttpResponse::InternalServerError().finish()
-        }
+        None => Err(AppError::NotFound(format!(
+            "User with ID {} not found",
+            user_id
+        ))),
     }
 }
