@@ -149,28 +149,22 @@ Custom error types and error handling logic:
 
 1.  Clone the repository:
 
-git clone https://github.com/yourusername/rust-actix-seaorm.git
+-   git clone https://github.com/gabrielrmunoz/rust-actix-seaorm.git
+-   cd rust-actix-seaorm
 
-cd rust-actix-seaorm
-
-1.  Create a [.env](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html) file based on the example:
+2.  Create a [.env](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html) file based on the example:
 
 DATABASE_URL=postgres://username:password@localhost:5432/dbname
-
 SERVER_HOST=127.0.0.1
-
 SERVER_PORT=8080
-
 RUST_LOG=info
 
-1.  Setup the database:
+3.  Setup the database:
 
 # Using Docker (optional)
-
 docker run --name postgres -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres
 
 # Create the database
-
 psql -U postgres -c "CREATE DATABASE dbname;"
 
 ### Running the Application
@@ -181,7 +175,7 @@ cargo watch -x run
 
 # Standard run
 
-cargo run
+shuttle run
 
 # Production build
 
