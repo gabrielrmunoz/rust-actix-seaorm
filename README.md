@@ -27,10 +27,10 @@ rust-actix-seaorm/
 ├── .gitignore                     # Git ignore file
 ├── Cargo.lock                     # Rust dependency lock file
 ├── Cargo.toml                     # Rust project configuration
+├── Secrets.toml                   # Shuttle-specific secrets for production environment
+├── Secrets.dev.toml               # Shuttle-specific secrets for development environment
 ├── .shuttle                       # Shuttle.rs deployment configuration
 │   └── config.toml                # Shuttle-specific configuration with project name
-│   └── Secrets.toml               # Shuttle-specific secrets for production environment
-│   └── Secrets.dev.toml           # Shuttle-specific secrets for development environment
 ├── .vscode/                       # VSCode configuration
 │   └── launch.json                # Debugging configuration
 ├── src/                           # Source code
@@ -62,6 +62,12 @@ DATABASE_HOST = '127.0.0.1'
 DATABASE_PORT = '5432'
 DATABASE_PASSWORD = 'postgres'
 DATABASE_URL = 'postgres://postgres:postgres@localhost:5432/postgres'
+```
+
+⚙️ config.toml Example
+-----------------
+```
+id = "proj_01XXXXXXXXXXXXXXXXXXXXXXXX"
 ```
 
 📚 Key Components
