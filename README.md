@@ -1,3 +1,5 @@
+![Actix Web + SeaORM](assets/images/cover.png)
+
 Rust Actix Web with SeaORM - REST API Boilerplate
 =================================================
 
