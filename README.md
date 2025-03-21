@@ -154,42 +154,42 @@ Custom error types and error handling logic:
 
 2.  Create a [.env](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html) file based on the example:
 
-DATABASE_URL=postgres://username:password@localhost:5432/dbname
-SERVER_HOST=127.0.0.1
-SERVER_PORT=8080
-RUST_LOG=info
+-   DATABASE_URL=postgres://username:password@localhost:5432/dbname
+-   SERVER_HOST=127.0.0.1
+-   SERVER_PORT=8080
+-   RUST_LOG=info
 
 3.  Setup the database:
 
 # Using Docker (optional)
-docker run --name postgres -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres
+-   docker run --name postgres -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres
 
 # Create the database
-psql -U postgres -c "CREATE DATABASE dbname;"
+-   psql -U postgres -c "CREATE DATABASE dbname;"
 
 ### Running the Application
 
 # Development mode with auto-reload (requires cargo-watch)
 
-cargo watch -x run
+-   cargo watch -x run
 
 # Standard run
 
-shuttle run
+-   shuttle run
 
 # Production build
 
-cargo build --release
+-   cargo build --release
 
 ### Running Tests
 
 # Run all tests
 
-cargo test
+-   cargo test
 
 # Run tests with output
 
-cargo test -- --nocapture
+-   cargo test -- --nocapture
 
 🔄 API Endpoints
 ----------------
@@ -252,21 +252,21 @@ Major dependencies include:
 
 ### Using Shuttle.rs
 
-The project includes configuration for deployment with Shuttle.rs:
+-   The project includes configuration for deployment with Shuttle.rs:
 
 # Install Shuttle CLI
 
-cargo install cargo-shuttle
+-   cargo install cargo-shuttle
 
 # Deploy your application
 
-cargo shuttle deploy
+-   shuttle deploy
 
 ### Manual Deployment
 
 For manual deployment, build a release binary:
 
-cargo build --release
+-   cargo build --release
 
 The binary will be available at [rust-actix-seaorm](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html).
 
