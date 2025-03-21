@@ -128,7 +128,7 @@ Custom error types and error handling logic:
 ```
     DATABASE_URL=postgres://username:password@localhost:5432/dbname
     SERVER_HOST=127.0.0.1
-    SERVER_PORT=8080
+    SERVER_PORT=8000
     RUST_LOG=info
 ```
 
