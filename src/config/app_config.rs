@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::env;
+use shuttle_runtime::SecretStore;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppConfig {
@@ -19,13 +19,19 @@ pub struct DatabaseConfig {
 }
 
 impl AppConfig {
-    pub fn from_env() -> Self {
-        let host = env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-        let port = env::var("SERVER_PORT")
-            .unwrap_or_else(|_| "8080".to_string())
+    pub fn from_secrets(secrets: &SecretStore) -> Self {
+        let host = secrets
+            .get("DATABASE_HOST")
+            .unwrap_or("127.0.0.1".to_string());
+        let port = secrets
+            .get("DATABASE_PORT")
+            .unwrap_or("5432".to_string())
             .parse()
-            .expect("SERVER_PORT must be a number");
-        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+            .expect("DATABASE_PORT must be a number");
+        let database_url = secrets
+            .get("DATABASE_URL")
+            .expect("DATABASE_URL must be set in Secrets.toml")
+            .to_string();
 
         AppConfig {
             server: ServerConfig { host, port },

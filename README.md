@@ -29,6 +29,8 @@ rust-actix-seaorm/
 ├── Cargo.toml                     # Rust project configuration
 ├── .shuttle                       # Shuttle.rs deployment configuration
 │   └── config.toml                # Shuttle-specific configuration with project name
+│   └── Secrets.toml               # Shuttle-specific secrets for production environment
+│   └── Secrets.dev.toml           # Shuttle-specific secrets for development environment
 ├── .vscode/                       # VSCode configuration
 │   └── launch.json                # Debugging configuration
 ├── src/                           # Source code
@@ -51,6 +53,15 @@ rust-actix-seaorm/
 │       ├── app_error.rs           # Custom application error types
 │       └── mod.rs                 # Error module exports
 └── target/                        # Compiled output (generated)
+```
+
+💡 Secrets.toml Example
+-----------------
+```
+DATABASE_HOST = '127.0.0.1'
+DATABASE_PORT = '5432'
+DATABASE_PASSWORD = 'postgres'
+DATABASE_URL = 'postgres://postgres:postgres@localhost:5432/postgres'
 ```
 
 📚 Key Components
@@ -126,19 +137,11 @@ Custom error types and error handling logic:
     cd rust-actix-seaorm
 ```
 
-#### 2.  Create a [.env](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html) file based on the example:
-```
-    DATABASE_URL=postgres://username:password@localhost:5432/dbname
-    SERVER_HOST=127.0.0.1
-    SERVER_PORT=8080
-    RUST_LOG=info
-```
-
-#### 3.  Setup the database:
+#### 2.  Setup the database:
 
 ##### Using Docker (optional)
 ```
-docker run --name postgres -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres
+docker run --name postgres -e POSTGRES_DATABASE_PASSWORD=password -p 5432:5432 -d postgres
 ```
 
 ##### Create the database
@@ -155,7 +158,7 @@ cargo watch -x run
 
 #### Standard run
 ```
-shuttle run
+shuttle run --secrets .shuttle/Secrets.dev.toml
 ```
 
 #### Production build
@@ -240,7 +243,30 @@ Major dependencies include:
 
 This project includes configuration for deployment with [Shuttle](https://shuttle.dev/), a serverless platform for Rust applications:
 
-** The project name is defined in `.shuttle/config.toml` which Shuttle uses for deployment
+-   The project name is defined in `.shuttle/config.toml` which Shuttle uses for deployment
+-   Shuttle automatically provisions and manages your PostgreSQL database
+
+#### Environment Variables in Shuttle
+When deploying with Shuttle, you need to handle environment variables differently than in local development:
+
+-   For database connection, Shuttle automatically provides a PostgreSQL database and sets up the connection through the `#[shuttle_runtime::Secrets]` macro in your code instead of using the `.env` file.
+
+-   For custom environment variables, you can set them through the Shuttle CLI:
+```
+shuttle secrets set DATABASE_URL=your_database_url
+```
+
+-   Alternatively, modify your application code to use Shuttle's secrets management:
+```
+#[shuttle_runtime::main]
+async fn actix_web(
+    #[shuttle_shared_db::Postgres] postgres: PgPool,
+    #[shuttle_runtime::Secrets] secrets: SecretStore,
+) -> shuttle_actix_web::ShuttleActixWeb {
+    // Use postgres pool directly instead of DATABASE_URL
+    // Use secrets.get("KEY") to access other environment variables
+}
+```
 
 #### Install Shuttle CLI
 ```
@@ -260,21 +286,6 @@ cargo build --release
 ```
 
 The binary will be available at [rust-actix-seaorm](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html).
-
-🐋 Docker Deployment
--------------
-
-You can also deploy this application using Docker:
-
-### Build the Docker image
-```
-docker build -t rust-actix-seaorm .
-```
-
-### Run the container
-```
-docker run -p 8080:8080 --env-file .env rust-actix-seaorm
-```
 
 🔍 Development Tools
 --------------------
