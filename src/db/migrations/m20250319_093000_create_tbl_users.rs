@@ -1,4 +1,4 @@
-use sea_orm_migration::{prelude::*, schema::*};
+use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -11,15 +11,21 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(TblUsers::Table)
                     .if_not_exists()
-                    .col(pk_auto(TblUsers::Id))
-                    .col(string(TblUsers::Username).not_null())
-                    .col(string(TblUsers::FirstName).null())
-                    .col(string(TblUsers::LastName).null())
-                    .col(string(TblUsers::Email).not_null())
-                    .col(string(TblUsers::Phone).null())
-                    .col(timestamp(TblUsers::CreatedOn).not_null())
-                    .col(timestamp(TblUsers::UpdatedOn).not_null())
-                    .col(timestamp(TblUsers::DeletedOn).null())
+                    .col(
+                        ColumnDef::new(TblUsers::Id)
+                            .integer()
+                            .not_null()
+                            .auto_increment()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(TblUsers::Username).string().not_null())
+                    .col(ColumnDef::new(TblUsers::FirstName).string().null())
+                    .col(ColumnDef::new(TblUsers::LastName).string().null())
+                    .col(ColumnDef::new(TblUsers::Email).string().not_null())
+                    .col(ColumnDef::new(TblUsers::Phone).string().null())
+                    .col(ColumnDef::new(TblUsers::CreatedOn).timestamp().not_null())
+                    .col(ColumnDef::new(TblUsers::UpdatedOn).timestamp().not_null())
+                    .col(ColumnDef::new(TblUsers::DeletedOn).timestamp().null())
                     .index(
                         Index::create()
                             .name("idx_username")
@@ -34,6 +40,12 @@ impl MigrationTrait for Migration {
                     )
                     .to_owned(),
             )
+            .await
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(Table::drop().table(TblUsers::Table).to_owned())
             .await
     }
 }
