@@ -4,17 +4,17 @@ pub mod db;
 pub mod domain;
 pub mod error;
 
-use actix_web::web::ServiceConfig;
+use actix_web::{App, HttpServer, middleware::Logger, web};
 use dotenv::dotenv;
 use sea_orm::{Database, DbConn};
 use sea_orm_migration::MigratorTrait;
-use shuttle_actix_web::ShuttleActixWeb;
+use std::io;
 
 use crate::config::AppConfig;
 use crate::db::migrations::Migrator;
 
-#[shuttle_runtime::main]
-async fn main() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clone + 'static> {
+#[tokio::main]
+async fn main() -> io::Result<()> {
     dotenv().ok();
 
     let app_config = AppConfig::from_env();
@@ -35,9 +35,16 @@ async fn main() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clon
         .expect("Failed to run migrations");
     log::info!("Database migrations completed successfully");
 
-    let config = move |cfg: &mut ServiceConfig| {
-        api::configure_routes(cfg, db);
-    };
-
-    Ok(config.into())
+    HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::new(db.clone()))
+            .configure(|config| api::configure_routes(config, db.clone()))
+            .wrap(Logger::default())
+    })
+    .bind(format!(
+        "{}:{}",
+        app_config.server.host, app_config.server.port
+    ))?
+    .run()
+    .await
 }
