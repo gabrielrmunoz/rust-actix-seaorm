@@ -243,21 +243,6 @@ cargo build --release
 
 The binary will be available at [rust-actix-seaorm](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html).
 
-🐋 Docker Deployment
--------------
-
-You can also deploy this application using Docker:
-
-### Build the Docker image
-```
-docker build -t rust-actix-seaorm .
-```
-
-### Run the container
-```
-docker run -p 8080:8080 --env-file .env rust-actix-seaorm
-```
-
 🔍 Development Tools
 --------------------
 
