@@ -248,12 +248,12 @@ The binary will be available at [rust-actix-seaorm](vscode-file://vscode-app/us
 
 You can also deploy this application using Docker:
 
-# Build the Docker image
+### Build the Docker image
 ```
 docker build -t rust-actix-seaorm .
 ```
 
-# Run the container
+### Run the container
 ```
 docker run -p 8080:8080 --env-file .env rust-actix-seaorm
 ```
