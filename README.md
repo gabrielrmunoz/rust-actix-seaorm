@@ -21,7 +21,7 @@ This project serves as a solid foundation for developers looking to create RESTf
 
 🏗️ Project Structure
 ---------------------
-
+```
 rust-actix-seaorm/
 ├── .env                           # Environment variables
 ├── .gitignore                     # Git ignore file
@@ -49,6 +49,7 @@ rust-actix-seaorm/
 │       ├── app_error.rs           # Custom application error types
 │       └── mod.rs                 # Error module exports
 └── target/                        # Compiled output (generated)
+```
 
 📚 Key Components
 -----------------
@@ -117,44 +118,60 @@ Custom error types and error handling logic:
 
 ### Environment Setup
 
-1.  Clone the repository:
+#### 1.  Clone the repository:
+```
+    git clone https://github.com/gabrielrmunoz/rust-actix-seaorm.git
+    cd rust-actix-seaorm
+```
 
-git clone https://github.com/gabrielrmunoz/rust-actix-seaorm.git
-cd rust-actix-seaorm
+#### 2.  Create a [.env](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html) file based on the example:
+```
+    DATABASE_URL=postgres://username:password@localhost:5432/dbname
+    SERVER_HOST=127.0.0.1
+    SERVER_PORT=8080
+    RUST_LOG=info
+```
 
-2.  Create a [.env](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html) file based on the example:
+#### 3.  Setup the database:
 
-DATABASE_URL=postgres://username:password@localhost:5432/dbname
-SERVER_HOST=127.0.0.1
-SERVER_PORT=8080
-RUST_LOG=info
-
-3.  Setup the database:
-
-# Using Docker (optional)
+##### Using Docker (optional)
+```
 docker run --name postgres -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres
+```
 
-# Create the database
+##### Create the database
+```
 psql -U postgres -c "CREATE DATABASE dbname;"
+```
 
 ### Running the Application
 
-# Development mode with auto-reload (requires cargo-watch)
+#### Development mode with auto-reload (requires cargo-watch)
+```
 cargo watch -x run
+```
 
-# Standard run
+#### Standard run
+```
 cargo run
+```
 
-# Production build
+#### Production build
+```
 cargo build --release
+```
 
 ### Running Tests
 
-# Run all tests
+#### Run all tests
+```
 cargo test
+```
 
-# Run tests with output
+#### Run tests with output
+```
 cargo test -- --nocapture
+```
 
 🔄 API Endpoints
 ----------------
@@ -176,6 +193,7 @@ cargo test -- --nocapture
 
 ### User Model
 
+```
 struct User {
     id: i32,
     username: String,
@@ -187,16 +205,17 @@ struct User {
     updated_on: NaiveDateTime,
     deleted_on: Option<NaiveDateTime>,
 }
+```
 
 🧩 Architecture
 ---------------
 
 This project follows a layered architecture pattern:
 
-1.  **HTTP Layer** (API): Handles incoming requests and outgoing responses
-2.  **Service Layer** (Domain): Contains business logic
-3.  **Data Access Layer** (Repositories): Abstracts database operations
-4.  **Database Layer** (SeaORM Entities): Represents database tables
+-   **HTTP Layer** (API): Handles incoming requests and outgoing responses
+-   **Service Layer** (Domain): Contains business logic
+-   **Data Access Layer** (Repositories): Abstracts database operations
+-   **Database Layer** (SeaORM Entities): Represents database tables
 
 📦 Dependencies
 ---------------
@@ -218,20 +237,26 @@ Major dependencies include:
 ### Manual Deployment
 
 For manual deployment, build a release binary:
-
+```
 cargo build --release
+```
 
 The binary will be available at [rust-actix-seaorm](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html).
 
-### Docker Deployment
+🐋 Docker Deployment
+-------------
 
 You can also deploy this application using Docker:
 
 # Build the Docker image
+```
 docker build -t rust-actix-seaorm .
+```
 
 # Run the container
+```
 docker run -p 8080:8080 --env-file .env rust-actix-seaorm
+```
 
 🔍 Development Tools
 --------------------
@@ -248,11 +273,12 @@ The repository includes VSCode launch configurations for debugging the applicati
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-1.  Fork the project
-2.  Create your feature branch (`git checkout -b feature/amazing-feature`)
-3.  Commit your changes (`git commit -m 'Add some amazing feature'`)
-4.  Push to the branch (`git push origin feature/amazing-feature`)
-5.  Open a Pull Request
+
+-   Fork the project
+-   Create your feature branch (`git checkout -b feature/amazing-feature`)
+-   Commit your changes (`git commit -m 'Add some amazing feature'`)
+-   Push to the branch (`git push origin feature/amazing-feature`)
+-   Open a Pull Request
 
 📄 License
 ----------
