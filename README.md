@@ -16,69 +16,42 @@ This project serves as a solid foundation for developers looking to create RESTf
 -   **Error Handling**: Robust error management with custom error types
 -   **Database Integration**: PostgreSQL support via SeaORM
 -   **Configuration Management**: Environment-based configuration with dotenv
--   **Deployment Ready**: Shuttle.rs deployment configuration included
+-   **Deployment Ready**: Simple deployment configuration for various platforms
 -   **Development Tools**: VSCode launch configurations for debugging
 
 🏗️ Project Structure
 ---------------------
-
+```
 rust-actix-seaorm/
-
-├── .env                           # Environment variables
-
-├── .gitignore                     # Git ignore file
-
-├── Cargo.lock                     # Rust dependency lock file
-
-├── Cargo.toml                     # Rust project configuration
-
-├── .shuttle/                      # Shuttle.rs deployment configuration
-
-│   └── config.toml                # Shuttle-specific configuration
-
-├── .vscode/                       # VSCode configuration
-
-│   └── launch.json                # Debugging configuration
-
-├── src/                           # Source code
-
-│   ├── main.rs                    # Application entry point
-
-│   ├── api/                       # API endpoints and route handlers
-
-│   │   ├── mod.rs                 # API module exports
-
-│   │   └── users.rs               # User API handlers
-
-│   ├── config/                    # Configuration management
-
-│   │   ├── app_config.rs          # Application configuration
-
-│   │   └── mod.rs                 # Config module exports
-
-│   ├── db/                        # Database layer
-
-│   │   ├── mod.rs                 # Database module exports
-
-│   │   ├── migrations/            # Database migrations
-
-│   │   ├── models/                # SeaORM entity models
-
-│   │   └── repositories/          # Data access repositories
-
-│   ├── domain/                    # Domain models and business logic
-
-│   │   ├── mod.rs                 # Domain module exports
-
-│   │   └── user.rs                # User domain model
-
-│   └── error/                     # Error handling
-
-│       ├── app_error.rs           # Custom application error types
-
-│       └── mod.rs                 # Error module exports
-
-└── target/                        # Compiled output (generated)
+├── .env                           # Environment variables
+├── .gitignore                     # Git ignore file
+├── Cargo.lock                     # Rust dependency lock file
+├── Cargo.toml                     # Rust project configuration
+├── .shuttle                       # Shuttle.rs deployment configuration
+│   └── config.toml                # Shuttle-specific configuration with project name
+├── .vscode/                       # VSCode configuration
+│   └── launch.json                # Debugging configuration
+├── src/                           # Source code
+│   ├── main.rs                    # Application entry point
+│   ├── api/                       # API endpoints and route handlers
+│   │   ├── mod.rs                 # API module exports
+│   │   └── users.rs               # User API handlers
+│   ├── config/                    # Configuration management
+│   │   ├── app_config.rs          # Application configuration
+│   │   └── mod.rs                 # Config module exports
+│   ├── db/                        # Database layer
+│   │   ├── mod.rs                 # Database module exports
+│   │   ├── migrations/            # Database migrations
+│   │   ├── models/                # SeaORM entity models
+│   │   └── repositories/          # Data access repositories
+│   ├── domain/                    # Domain models and business logic
+│   │   ├── mod.rs                 # Domain module exports
+│   │   └── user.rs                # User domain model
+│   └── error/                     # Error handling
+│       ├── app_error.rs           # Custom application error types
+│       └── mod.rs                 # Error module exports
+└── target/                        # Compiled output (generated)
+```
 
 📚 Key Components
 -----------------
@@ -147,49 +120,60 @@ Custom error types and error handling logic:
 
 ### Environment Setup
 
-1.  Clone the repository:
+#### 1.  Clone the repository:
+```
+    git clone https://github.com/gabrielrmunoz/rust-actix-seaorm.git
+    cd rust-actix-seaorm
+```
 
--   git clone https://github.com/gabrielrmunoz/rust-actix-seaorm.git
--   cd rust-actix-seaorm
+#### 2.  Create a [.env](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html) file based on the example:
+```
+    DATABASE_URL=postgres://username:password@localhost:5432/dbname
+    SERVER_HOST=127.0.0.1
+    SERVER_PORT=8080
+    RUST_LOG=info
+```
 
-2.  Create a [.env](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html) file based on the example:
+#### 3.  Setup the database:
 
--   DATABASE_URL=postgres://username:password@localhost:5432/dbname
--   SERVER_HOST=127.0.0.1
--   SERVER_PORT=8080
--   RUST_LOG=info
+##### Using Docker (optional)
+```
+docker run --name postgres -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres
+```
 
-3.  Setup the database:
-
-# Using Docker (optional)
--   docker run --name postgres -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres
-
-# Create the database
--   psql -U postgres -c "CREATE DATABASE dbname;"
+##### Create the database
+```
+psql -U postgres -c "CREATE DATABASE dbname;"
+```
 
 ### Running the Application
 
-# Development mode with auto-reload (requires cargo-watch)
+#### Development mode with auto-reload (requires cargo-watch)
+```
+cargo watch -x run
+```
 
--   cargo watch -x run
+#### Standard run
+```
+shuttle run
+```
 
-# Standard run
-
--   shuttle run
-
-# Production build
-
--   cargo build --release
+#### Production build
+```
+cargo build --release
+```
 
 ### Running Tests
 
-# Run all tests
+#### Run all tests
+```
+cargo test
+```
 
--   cargo test
-
-# Run tests with output
-
--   cargo test -- --nocapture
+#### Run tests with output
+```
+cargo test -- --nocapture
+```
 
 🔄 API Endpoints
 ----------------
@@ -211,27 +195,29 @@ Custom error types and error handling logic:
 
 ### User Model
 
-struct User {
-    id: i32,
-    username: String,
-    first_name: Option<String>,
-    last_name: Option<String>,
-    email: String,
-    phone: Option<String>,
-    created_on: NaiveDateTime,
-    updated_on: NaiveDateTime,
-    deleted_on: Option<NaiveDateTime>,
+```
+struct User {
+    id: i32,
+    username: String,
+    first_name: Option<String>,
+    last_name: Option<String>,
+    email: String,
+    phone: Option<String>,
+    created_on: NaiveDateTime,
+    updated_on: NaiveDateTime,
+    deleted_on: Option<NaiveDateTime>,
 }
+```
 
 🧩 Architecture
 ---------------
 
 This project follows a layered architecture pattern:
 
-1.  **HTTP Layer** (API): Handles incoming requests and outgoing responses
-2.  **Service Layer** (Domain): Contains business logic
-3.  **Data Access Layer** (Repositories): Abstracts database operations
-4.  **Database Layer** (SeaORM Entities): Represents database tables
+-   **HTTP Layer** (API): Handles incoming requests and outgoing responses
+-   **Service Layer** (Domain): Contains business logic
+-   **Data Access Layer** (Repositories): Abstracts database operations
+-   **Database Layer** (SeaORM Entities): Represents database tables
 
 📦 Dependencies
 ---------------
@@ -244,31 +230,51 @@ Major dependencies include:
 -   **tokio**: Async runtime
 -   **serde**: Serialization/deserialization framework
 -   **dotenv**: Environment variable loading
--   **log** and **env_logger**: Logging infrastructure
+-   **log**: Logging infrastructure
 -   **chrono**: Date and time utilities
 
 🚢 Deployment
 -------------
 
-### Using Shuttle.rs
+### Using Shuttle
 
--   The project includes configuration for deployment with Shuttle.rs:
+This project includes configuration for deployment with [Shuttle](https://shuttle.dev/), a serverless platform for Rust applications:
 
-# Install Shuttle CLI
+** The project name is defined in `.shuttle/config.toml` which Shuttle uses for deployment
 
--   cargo install cargo-shuttle
+#### Install Shuttle CLI
+```
+cargo install cargo-shuttle
+```
 
-# Deploy your application
-
--   shuttle deploy
+#### Deploy your application
+```
+shuttle deploy
+```
 
 ### Manual Deployment
 
 For manual deployment, build a release binary:
-
--   cargo build --release
+```
+cargo build --release
+```
 
 The binary will be available at [rust-actix-seaorm](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html).
+
+🐋 Docker Deployment
+-------------
+
+You can also deploy this application using Docker:
+
+### Build the Docker image
+```
+docker build -t rust-actix-seaorm .
+```
+
+### Run the container
+```
+docker run -p 8080:8080 --env-file .env rust-actix-seaorm
+```
 
 🔍 Development Tools
 --------------------
@@ -285,11 +291,12 @@ The repository includes VSCode launch configurations for debugging the applicati
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-1.  Fork the project
-2.  Create your feature branch (`git checkout -b feature/amazing-feature`)
-3.  Commit your changes (`git commit -m 'Add some amazing feature'`)
-4.  Push to the branch (`git push origin feature/amazing-feature`)
-5.  Open a Pull Request
+
+-   Fork the project
+-   Create your feature branch (`git checkout -b feature/amazing-feature`)
+-   Commit your changes (`git commit -m 'Add some amazing feature'`)
+-   Push to the branch (`git push origin feature/amazing-feature`)
+-   Open a Pull Request
 
 📄 License
 ----------
@@ -304,6 +311,3 @@ If you have any questions or suggestions about this project, please open an issu
 * * * * *
 
 *This boilerplate was created to provide a solid foundation for Rust web applications with a focus on maintainability and best practices. Happy coding!*
-
-*\
-*
