@@ -23,6 +23,8 @@ async fn main(
 ) -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clone + 'static> {
     dotenv().ok();
 
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+
     let db: DbConn = Database::connect(conn_str)
         .await
         .expect("Error connecting to the database");
