@@ -17,6 +17,8 @@ use crate::db::migrations::Migrator;
 async fn main() -> io::Result<()> {
     dotenv().ok();
 
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+
     let app_config = AppConfig::from_env();
 
     log::info!(
