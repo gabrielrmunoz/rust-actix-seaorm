@@ -2177,6 +2177,8 @@ dependencies = [
  "dotenv",
  "env_logger",
  "log",
+ "once_cell",
+ "regex",
  "sea-orm",
  "sea-orm-migration",
  "serde",

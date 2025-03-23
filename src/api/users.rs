@@ -1,9 +1,12 @@
 use actix_web::{HttpResponse, web};
 use log::{info, warn};
+use once_cell::sync::Lazy;
+use regex::Regex;
 use sea_orm::DbConn;
 use sea_orm::sqlx::types::chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use validator::{Validate, ValidationError};
 
 use crate::db::models::UserActiveModel;
 use crate::db::repositories::UserRepository;
@@ -25,27 +28,63 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     );
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Validate)]
 pub struct CreateUserRequest {
+    #[validate(length(
+        min = 3,
+        max = 200,
+        message = "Username must be between 3 and 50 characters"
+    ))]
+    #[validate(custom(function = validate_no_spaces))]
     pub username: String,
-    pub first_name: Option<String>,
-    pub last_name: Option<String>,
+
+    #[validate(length(min = 3, max = 20, message = "First name cannot exceed 20 characters"))]
+    pub first_name: String,
+
+    #[validate(length(min = 3, max = 20, message = "Last name cannot exceed 20 characters"))]
+    pub last_name: String,
+
+    #[validate(email(message = "Invalid email format"))]
     pub email: String,
-    pub phone: Option<String>,
+
+    #[validate(regex(path = *PHONE_REGEX, message = "Invalid phone number format"))]
+    pub phone: String,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Validate)]
 pub struct UpdateUserRequest {
+    #[validate(length(min = 3, max = 20, message = "Username must be at least 3 characters"))]
+    #[validate(custom(function = validate_no_spaces))]
     pub username: Option<String>,
+
+    #[validate(length(min = 3, max = 20, message = "First name cannot exceed 20 characters"))]
     pub first_name: Option<String>,
+
+    #[validate(length(min = 3, max = 20, message = "Last name cannot exceed 20 characters"))]
     pub last_name: Option<String>,
+
+    #[validate(email(message = "Invalid email format"))]
     pub email: Option<String>,
+
+    #[validate(regex(path = *PHONE_REGEX, message = "Invalid phone number format"))]
     pub phone: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct GetUsersParams {
     include_deleted: Option<bool>,
+}
+
+static PHONE_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^(\+\d{1,3})?[-\s]?\d{6,14}$").unwrap());
+
+fn validate_no_spaces(username: &str) -> Result<(), ValidationError> {
+    if username.contains(' ') {
+        let mut error = ValidationError::new("no_spaces");
+        error.message = Some("Username cannot contain spaces".into());
+        return Err(error);
+    }
+    Ok(())
 }
 
 pub async fn get_users(
@@ -85,12 +124,11 @@ pub async fn create_user(
     info!("Attempting to create user with username: {}", item.username);
     let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
 
-    if item.username.trim().is_empty() {
-        return Err(AppError::Validation("Username cannot be empty".into()));
-    }
-
-    if item.email.trim().is_empty() {
-        return Err(AppError::Validation("Email cannot be empty".into()));
+    if let Err(errors) = item.validate() {
+        return Err(AppError::Validation(format!(
+            "Validation errors: {:?}",
+            errors
+        )));
     }
 
     if let Some(_) = repo.find_by_username(&item.username).await? {
@@ -104,6 +142,13 @@ pub async fn create_user(
         return Err(AppError::Validation(format!(
             "Email {} already exists",
             item.email
+        )));
+    }
+
+    if let Some(_) = repo.find_by_phone(&item.phone).await? {
+        return Err(AppError::Validation(format!(
+            "Phone {} already exists",
+            item.phone
         )));
     }
 
@@ -175,16 +220,16 @@ pub async fn update_user(
                 active_model.username = Set(username.clone());
             }
             if let Some(first_name) = &item.first_name {
-                active_model.first_name = Set(Some(first_name.clone()));
+                active_model.first_name = Set(first_name.clone());
             }
             if let Some(last_name) = &item.last_name {
-                active_model.last_name = Set(Some(last_name.clone()));
+                active_model.last_name = Set(last_name.clone());
             }
             if let Some(email) = &item.email {
                 active_model.email = Set(email.clone());
             }
             if let Some(phone) = &item.phone {
-                active_model.phone = Set(Some(phone.clone()));
+                active_model.phone = Set(phone.clone());
             }
 
             active_model.updated_on = Set(Local::now().naive_local());
