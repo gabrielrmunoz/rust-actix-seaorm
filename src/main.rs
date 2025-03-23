@@ -3,6 +3,7 @@ pub mod config;
 pub mod db;
 pub mod domain;
 pub mod error;
+pub mod validators;
 
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use dotenv::dotenv;

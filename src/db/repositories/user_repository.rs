@@ -42,6 +42,13 @@ impl UserRepository {
             .await
     }
 
+    pub async fn find_by_phone(&self, phone: &str) -> Result<Option<UserModel>, DbErr> {
+        UserEntity::find()
+            .filter(UserColumn::Phone.eq(phone))
+            .one(self.db.as_ref())
+            .await
+    }
+
     pub async fn create(&self, model: UserActiveModel) -> Result<UserModel, DbErr> {
         model.insert(self.db.as_ref()).await
     }

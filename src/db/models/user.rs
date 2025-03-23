@@ -7,10 +7,10 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub username: String,
-    pub first_name: Option<String>,
-    pub last_name: Option<String>,
+    pub first_name: String,
+    pub last_name: String,
     pub email: String,
-    pub phone: Option<String>,
+    pub phone: String,
     pub created_on: NaiveDateTime,
     pub updated_on: NaiveDateTime,
     pub deleted_on: Option<NaiveDateTime>,
