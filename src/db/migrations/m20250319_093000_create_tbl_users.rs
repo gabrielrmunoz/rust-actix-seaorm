@@ -18,11 +18,15 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(TblUsers::Username).string().not_null())
-                    .col(ColumnDef::new(TblUsers::FirstName).string().null())
-                    .col(ColumnDef::new(TblUsers::LastName).string().null())
+                    .col(ColumnDef::new(TblUsers::Username).string_len(20).not_null())
+                    .col(
+                        ColumnDef::new(TblUsers::FirstName)
+                            .string_len(20)
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(TblUsers::LastName).string_len(20).not_null())
                     .col(ColumnDef::new(TblUsers::Email).string().not_null())
-                    .col(ColumnDef::new(TblUsers::Phone).string().null())
+                    .col(ColumnDef::new(TblUsers::Phone).string_len(19).not_null())
                     .col(ColumnDef::new(TblUsers::CreatedOn).timestamp().not_null())
                     .col(ColumnDef::new(TblUsers::UpdatedOn).timestamp().not_null())
                     .col(ColumnDef::new(TblUsers::DeletedOn).timestamp().null())
@@ -36,6 +40,12 @@ impl MigrationTrait for Migration {
                         Index::create()
                             .name("idx_email")
                             .col(TblUsers::Email)
+                            .unique(),
+                    )
+                    .index(
+                        Index::create()
+                            .name("idx_phone")
+                            .col(TblUsers::Phone)
                             .unique(),
                     )
                     .to_owned(),
