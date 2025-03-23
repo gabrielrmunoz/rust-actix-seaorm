@@ -5,7 +5,7 @@ pub mod domain;
 pub mod error;
 pub mod validators;
 
-use actix_web::{App, HttpServer, middleware::Logger, web};
+use actix_web::web::ServiceConfig;
 use dotenv::dotenv;
 use sea_orm::{Database, DbConn};
 use sea_orm_migration::MigratorTrait;
@@ -36,16 +36,9 @@ async fn main(
         .expect("Failed to run migrations");
     log::info!("Database migrations completed successfully");
 
-    HttpServer::new(move || {
-        App::new()
-            .app_data(web::Data::new(db.clone()))
-            .configure(|config| api::configure_routes(config, db.clone()))
-            .wrap(Logger::default())
-    })
-    .bind(format!(
-        "{}:{}",
-        app_config.server.host, app_config.server.port
-    ))?
-    .run()
-    .await
+    let config = move |cfg: &mut ServiceConfig| {
+        api::configure_routes(cfg, db);
+    };
+
+    Ok(config.into())
 }
