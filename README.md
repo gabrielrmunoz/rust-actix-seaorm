@@ -20,6 +20,7 @@ This project serves as a solid foundation for developers looking to create RESTf
 -   **Configuration Management**: Environment-based configuration with dotenv
 -   **Deployment Ready**: Simple deployment configuration for various platforms
 -   **Development Tools**: VSCode launch configurations for debugging
+-   **Input Validation**: Centralized validation rules for consistent data processing
 
 🏗️ Project Structure
 ---------------------
@@ -47,6 +48,9 @@ rust-actix-seaorm/
 │   ├── domain/                    # Domain models and business logic
 │   │   ├── mod.rs                 # Domain module exports
 │   │   └── user.rs                # User domain model
+│   ├── validators/                # Input validation rules
+│   │   ├── mod.rs                 # Validators module exports
+│   │   └── user_validators.rs     # User-specific validation rules
 │   └── error/                     # Error handling
 │       ├── app_error.rs           # Custom application error types
 │       └── mod.rs                 # Error module exports
@@ -100,6 +104,16 @@ Core business logic and domain models:
 -   Domain entity definitions
 -   Service implementations
 -   Domain events
+
+### Validators Layer ([validators](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html))
+
+Contains reusable validation logic:
+
+-   **Regular expressions**: For format validation (phone numbers, etc.)
+-   **Custom validators**: Functions for complex validation rules
+-   **Shared validation logic**: Common validation patterns used across the application
+
+The validators provide a centralized location for all validation rules, ensuring consistency across the application and making it easier to update validation logic in one place.
 
 ### Error Handling ([error](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html))
 
@@ -195,7 +209,7 @@ cargo test -- --nocapture
 
 ### User Model
 
-```
+```rust
 struct User {
     id: i32,
     username: String,
@@ -209,6 +223,22 @@ struct User {
 }
 ```
 
+### Validation Rules
+
+```rust
+// Phone number validation
+static PHONE_REGEX: Lazy<Regex> = 
+    Lazy::new(|| Regex::new(r"^(\+\d{1,3})?-\d{6,14}$").unwrap());
+
+// Username validation (no spaces allowed)
+fn validate_no_spaces(username: &str) -> Result<(), ValidationError> {
+    if username.contains(' ') {
+        // Return validation error
+    }
+    Ok(())
+}
+```
+
 🧩 Architecture
 ---------------
 
@@ -218,6 +248,7 @@ This project follows a layered architecture pattern:
 -   **Service Layer** (Domain): Contains business logic
 -   **Data Access Layer** (Repositories): Abstracts database operations
 -   **Database Layer** (SeaORM Entities): Represents database tables
+-   **Validation Layer**: Centralizes input validation rules
 
 📦 Dependencies
 ---------------
@@ -229,6 +260,7 @@ Major dependencies include:
 -   **sqlx**: SQL toolkit with compile-time checked queries
 -   **tokio**: Async runtime
 -   **serde**: Serialization/deserialization framework
+-   **validator**: Input validation framework
 -   **dotenv**: Environment variable loading
 -   **log**: Logging infrastructure
 -   **chrono**: Date and time utilities
