@@ -75,8 +75,7 @@ pub struct GetUsersParams {
     include_deleted: Option<bool>,
 }
 
-static PHONE_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^(\+\d{1,3})?[-\s]?\d{6,14}$").unwrap());
+static PHONE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\+\d{1,3})?-\d{6,14}$").unwrap());
 
 fn validate_no_spaces(username: &str) -> Result<(), ValidationError> {
     if username.contains(' ') {
