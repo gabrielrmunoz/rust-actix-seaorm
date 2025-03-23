@@ -1,12 +1,12 @@
 use actix_web::{HttpResponse, web};
 use log::{info, warn};
-use once_cell::sync::Lazy;
-use regex::Regex;
 use sea_orm::DbConn;
 use sea_orm::sqlx::types::chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use validator::{Validate, ValidationError};
+use validator::Validate;
+
+use crate::validators::user_validators::{PHONE_REGEX, validate_no_spaces};
 
 use crate::db::models::UserActiveModel;
 use crate::db::repositories::UserRepository;
@@ -73,17 +73,6 @@ pub struct UpdateUserRequest {
 #[derive(Deserialize)]
 pub struct GetUsersParams {
     include_deleted: Option<bool>,
-}
-
-static PHONE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\+\d{1,3})?-\d{6,14}$").unwrap());
-
-fn validate_no_spaces(username: &str) -> Result<(), ValidationError> {
-    if username.contains(' ') {
-        let mut error = ValidationError::new("no_spaces");
-        error.message = Some("Username cannot contain spaces".into());
-        return Err(error);
-    }
-    Ok(())
 }
 
 pub async fn get_users(
