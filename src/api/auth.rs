@@ -22,7 +22,7 @@ pub struct LoginResponse {
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(web::scope("/auth").route("/login", web::post().to(login)));
+    cfg.route("/login", web::post().to(login));
 }
 
 async fn login(
