@@ -6,26 +6,30 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use validator::Validate;
 
-use crate::validators::user_validators::{PHONE_REGEX, validate_no_spaces};
+use crate::auth::hash_password;
+use crate::validators::user_validators::{
+    process_json_validation, validate_no_spaces, validate_password, validate_phone, validate_role,
+};
 
 use crate::db::models::UserActiveModel;
 use crate::db::repositories::UserRepository;
 use crate::error::AppError;
 use sea_orm::ActiveValue::Set;
 
-pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/users")
-            .service(web::resource("").get(get_users).post(create_user))
-            .service(
-                web::resource("/{id}")
-                    .get(get_user)
-                    .put(update_user)
-                    .delete(delete_user_physical),
-            )
-            .service(web::resource("/{id}/soft-delete").patch(delete_user_logical))
-            .service(web::resource("/{id}/restore").patch(restore_user)),
-    );
+pub fn configure_protected(cfg: &mut web::ServiceConfig) {
+    cfg.service(web::resource("").get(get_users))
+        .service(
+            web::resource("/{id}")
+                .get(get_user)
+                .put(update_user)
+                .delete(delete_user_physical),
+        )
+        .service(web::resource("/{id}/soft-delete").patch(delete_user_logical))
+        .service(web::resource("/{id}/restore").patch(restore_user));
+}
+
+pub fn configure_public(cfg: &mut web::ServiceConfig) {
+    cfg.service(web::resource("").post(create_user));
 }
 
 #[derive(Deserialize, Serialize, Validate)]
@@ -38,6 +42,9 @@ pub struct CreateUserRequest {
     #[validate(custom(function = validate_no_spaces))]
     pub username: String,
 
+    #[validate(custom(function = validate_password))]
+    pub password: String,
+
     #[validate(length(min = 3, max = 20, message = "First name cannot exceed 20 characters"))]
     pub first_name: String,
 
@@ -47,8 +54,12 @@ pub struct CreateUserRequest {
     #[validate(email(message = "Invalid email format"))]
     pub email: String,
 
-    #[validate(regex(path = *PHONE_REGEX, message = "Invalid phone number format"))]
+    #[validate(custom(function = validate_phone))]
     pub phone: String,
+
+    #[validate(length(max = 10, message = "Role cannot exceed 10 characters"))]
+    #[validate(custom(function = validate_role))]
+    pub role: String,
 }
 
 #[derive(Deserialize, Serialize, Validate)]
@@ -66,8 +77,12 @@ pub struct UpdateUserRequest {
     #[validate(email(message = "Invalid email format"))]
     pub email: Option<String>,
 
-    #[validate(regex(path = *PHONE_REGEX, message = "Invalid phone number format"))]
+    #[validate(custom(function = validate_phone))]
     pub phone: Option<String>,
+
+    #[validate(length(max = 10, message = "Role cannot exceed 10 characters"))]
+    #[validate(custom(function = validate_role))]
+    pub role: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -109,31 +124,27 @@ pub async fn create_user(
     db: web::Data<DbConn>,
     item: web::Json<CreateUserRequest>,
 ) -> Result<HttpResponse, AppError> {
+    process_json_validation(&item)?;
+
     info!("Attempting to create user with username: {}", item.username);
+
     let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
 
-    if let Err(errors) = item.validate() {
-        return Err(AppError::Validation(format!(
-            "Validation errors: {:?}",
-            errors
-        )));
-    }
-
-    if let Some(_) = repo.find_by_username(&item.username).await? {
+    if let Some(_) = repo.find_by_username(item.username.clone()).await? {
         return Err(AppError::Validation(format!(
             "Username {} already exists",
             item.username
         )));
     }
 
-    if let Some(_) = repo.find_by_email(&item.email).await? {
+    if let Some(_) = repo.find_by_email(item.email.clone()).await? {
         return Err(AppError::Validation(format!(
             "Email {} already exists",
             item.email
         )));
     }
 
-    if let Some(_) = repo.find_by_phone(&item.phone).await? {
+    if let Some(_) = repo.find_by_phone(item.phone.clone()).await? {
         return Err(AppError::Validation(format!(
             "Phone {} already exists",
             item.phone
@@ -141,12 +152,15 @@ pub async fn create_user(
     }
 
     let now = Local::now().naive_local();
+    let hashed_password = hash_password(&item.password)?;
     let user_model = UserActiveModel {
         username: Set(item.username.clone()),
+        password: Set(hashed_password),
         first_name: Set(item.first_name.clone()),
         last_name: Set(item.last_name.clone()),
         email: Set(item.email.clone()),
         phone: Set(item.phone.clone()),
+        role: Set(item.role.clone()),
         created_on: Set(now),
         updated_on: Set(now),
         ..Default::default()
@@ -163,17 +177,20 @@ pub async fn update_user(
     path: web::Path<i32>,
     item: web::Json<UpdateUserRequest>,
 ) -> Result<HttpResponse, AppError> {
+    process_json_validation(&item)?;
+
     let user_id = path.into_inner();
-    let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
 
     info!("Attempting to update user with ID: {}", user_id);
+
+    let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
 
     if let Some(ref username) = item.username {
         if username.trim().is_empty() {
             return Err(AppError::Validation("Username cannot be empty".into()));
         }
 
-        if let Some(existing_user) = repo.find_by_username(username).await? {
+        if let Some(existing_user) = repo.find_by_username(username.clone()).await? {
             if existing_user.id != user_id {
                 return Err(AppError::Validation(format!(
                     "Username {} already exists",
@@ -188,7 +205,7 @@ pub async fn update_user(
             return Err(AppError::Validation("Email cannot be empty".into()));
         }
 
-        if let Some(existing_user) = repo.find_by_email(email).await? {
+        if let Some(existing_user) = repo.find_by_email(email.clone()).await? {
             if existing_user.id != user_id {
                 return Err(AppError::Validation(format!(
                     "Email {} already exists",
@@ -218,6 +235,9 @@ pub async fn update_user(
             }
             if let Some(phone) = &item.phone {
                 active_model.phone = Set(phone.clone());
+            }
+            if let Some(role) = &item.role {
+                active_model.role = Set(role.clone());
             }
 
             active_model.updated_on = Set(Local::now().naive_local());
