@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use validator::Validate;
 
-use crate::validators::user_validators::{PHONE_REGEX, validate_no_spaces, validate_role};
+use crate::validators::user_validators::{
+    PASSWORD_REGEX, PHONE_REGEX, validate_no_spaces, validate_role,
+};
 
 use crate::db::models::UserActiveModel;
 use crate::db::repositories::UserRepository;
@@ -38,6 +40,9 @@ pub struct CreateUserRequest {
     ))]
     #[validate(custom(function = validate_no_spaces))]
     pub username: String,
+
+    #[validate(regex(path = *PASSWORD_REGEX, message = "Invalid password format"))]
+    pub password: String,
 
     #[validate(length(min = 3, max = 20, message = "First name cannot exceed 20 characters"))]
     pub first_name: String,

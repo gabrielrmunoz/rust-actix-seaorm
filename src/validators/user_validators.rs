@@ -6,6 +6,10 @@ use crate::auth::UserRole;
 
 pub static PHONE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\+\d{1,3})?-\d{6,14}$").unwrap());
 
+pub static PASSWORD_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{10,20}$").unwrap()
+});
+
 pub fn validate_no_spaces(username: &str) -> Result<(), ValidationError> {
     if username.contains(' ') {
         let mut error = ValidationError::new("no_spaces");

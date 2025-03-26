@@ -19,6 +19,7 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(TblUsers::Username).string_len(20).not_null())
+                    .col(ColumnDef::new(TblUsers::Password).string().not_null())
                     .col(
                         ColumnDef::new(TblUsers::FirstName)
                             .string_len(20)
@@ -66,6 +67,7 @@ enum TblUsers {
     Table,
     Id,
     Username,
+    Password,
     FirstName,
     LastName,
     Email,
