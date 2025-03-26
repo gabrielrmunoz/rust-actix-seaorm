@@ -13,19 +13,20 @@ use crate::db::repositories::UserRepository;
 use crate::error::AppError;
 use sea_orm::ActiveValue::Set;
 
-pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/users")
-            .service(web::resource("").get(get_users).post(create_user))
-            .service(
-                web::resource("/{id}")
-                    .get(get_user)
-                    .put(update_user)
-                    .delete(delete_user_physical),
-            )
-            .service(web::resource("/{id}/soft-delete").patch(delete_user_logical))
-            .service(web::resource("/{id}/restore").patch(restore_user)),
-    );
+pub fn configure_protected(cfg: &mut web::ServiceConfig) {
+    cfg.service(web::resource("").get(get_users))
+        .service(
+            web::resource("/{id}")
+                .get(get_user)
+                .put(update_user)
+                .delete(delete_user_physical),
+        )
+        .service(web::resource("/{id}/soft-delete").patch(delete_user_logical))
+        .service(web::resource("/{id}/restore").patch(restore_user));
+}
+
+pub fn configure_public(cfg: &mut web::ServiceConfig) {
+    cfg.service(web::resource("").post(create_user));
 }
 
 #[derive(Deserialize, Serialize, Validate)]
