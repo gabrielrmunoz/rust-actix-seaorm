@@ -19,6 +19,26 @@ pub fn validate_no_spaces(username: &str) -> Result<(), ValidationError> {
     Ok(())
 }
 
+pub fn validate_password(password: &str) -> Result<(), ValidationError> {
+    if PASSWORD_REGEX.is_match(password) {
+        Ok(())
+    } else {
+        let mut error = ValidationError::new("invalid_password");
+        error.message = Some("Password must be 10-20 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&)".into());
+        Err(error)
+    }
+}
+
+pub fn validate_phone(phone: &str) -> Result<(), ValidationError> {
+    if PHONE_REGEX.is_match(phone) {
+        Ok(())
+    } else {
+        let mut error = ValidationError::new("invalid_phone");
+        error.message = Some("Phone number must be in the format +123-1234567890".into());
+        Err(error)
+    }
+}
+
 pub fn validate_role(role: &str) -> Result<(), ValidationError> {
     if UserRole::is_valid_role(role) {
         Ok(())

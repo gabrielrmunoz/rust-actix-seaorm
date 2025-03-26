@@ -7,7 +7,7 @@ use std::sync::Arc;
 use validator::Validate;
 
 use crate::validators::user_validators::{
-    PASSWORD_REGEX, PHONE_REGEX, validate_no_spaces, validate_role,
+    validate_no_spaces, validate_password, validate_phone, validate_role,
 };
 
 use crate::db::models::UserActiveModel;
@@ -41,7 +41,7 @@ pub struct CreateUserRequest {
     #[validate(custom(function = validate_no_spaces))]
     pub username: String,
 
-    #[validate(regex(path = *PASSWORD_REGEX, message = "Invalid password format"))]
+    #[validate(custom(function = validate_password))]
     pub password: String,
 
     #[validate(length(min = 3, max = 20, message = "First name cannot exceed 20 characters"))]
@@ -53,7 +53,7 @@ pub struct CreateUserRequest {
     #[validate(email(message = "Invalid email format"))]
     pub email: String,
 
-    #[validate(regex(path = *PHONE_REGEX, message = "Invalid phone number format"))]
+    #[validate(custom(function = validate_phone))]
     pub phone: String,
 
     #[validate(length(max = 10, message = "Role cannot exceed 10 characters"))]
@@ -76,7 +76,7 @@ pub struct UpdateUserRequest {
     #[validate(email(message = "Invalid email format"))]
     pub email: Option<String>,
 
-    #[validate(regex(path = *PHONE_REGEX, message = "Invalid phone number format"))]
+    #[validate(custom(function = validate_phone))]
     pub phone: Option<String>,
 
     #[validate(length(max = 10, message = "Role cannot exceed 10 characters"))]
