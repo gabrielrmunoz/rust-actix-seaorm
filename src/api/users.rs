@@ -6,8 +6,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use validator::Validate;
 
+use crate::auth::hash_password;
 use crate::validators::user_validators::{
-    validate_no_spaces, validate_password, validate_phone, validate_role,
+    process_json_validation, validate_no_spaces, validate_password, validate_phone, validate_role,
 };
 
 use crate::db::models::UserActiveModel;
@@ -123,15 +124,11 @@ pub async fn create_user(
     db: web::Data<DbConn>,
     item: web::Json<CreateUserRequest>,
 ) -> Result<HttpResponse, AppError> {
-    info!("Attempting to create user with username: {}", item.username);
-    let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
+    process_json_validation(&item)?;
 
-    if let Err(errors) = item.validate() {
-        return Err(AppError::Validation(format!(
-            "Validation errors: {:?}",
-            errors
-        )));
-    }
+    info!("Attempting to create user with username: {}", item.username);
+
+    let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
 
     if let Some(_) = repo.find_by_username(item.username.clone()).await? {
         return Err(AppError::Validation(format!(
@@ -155,8 +152,10 @@ pub async fn create_user(
     }
 
     let now = Local::now().naive_local();
+    let hashed_password = hash_password(&item.password)?;
     let user_model = UserActiveModel {
         username: Set(item.username.clone()),
+        password: Set(hashed_password),
         first_name: Set(item.first_name.clone()),
         last_name: Set(item.last_name.clone()),
         email: Set(item.email.clone()),
@@ -178,10 +177,13 @@ pub async fn update_user(
     path: web::Path<i32>,
     item: web::Json<UpdateUserRequest>,
 ) -> Result<HttpResponse, AppError> {
+    process_json_validation(&item)?;
+
     let user_id = path.into_inner();
-    let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
 
     info!("Attempting to update user with ID: {}", user_id);
+
+    let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
 
     if let Some(ref username) = item.username {
         if username.trim().is_empty() {

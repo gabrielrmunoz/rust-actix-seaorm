@@ -2,12 +2,14 @@ use actix_web::{HttpResponse, web};
 use sea_orm::DbConn;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use validator::Validate;
 
 use crate::auth::{generate_token, verify_password};
 use crate::db::repositories::UserRepository;
 use crate::error::AppError;
+use crate::validators::user_validators::process_json_validation;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
@@ -29,6 +31,8 @@ async fn login(
     db: web::Data<DbConn>,
     req: web::Json<LoginRequest>,
 ) -> Result<HttpResponse, AppError> {
+    process_json_validation(&req)?;
+
     let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
 
     let user = match repo.find_by_username(req.username.clone()).await? {
