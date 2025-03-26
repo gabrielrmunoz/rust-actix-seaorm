@@ -15,34 +15,5 @@ pub struct User {
     pub email: String,
 
     pub phone: Option<String>,
-}
-
-impl User {
-    pub fn new(username: String, email: String) -> Self {
-        Self {
-            id: None,
-            username,
-            first_name: None,
-            last_name: None,
-            email,
-            phone: None,
-        }
-    }
-
-    pub fn full_name(&self) -> String {
-        match (&self.first_name, &self.last_name) {
-            (Some(first), Some(last)) => format!("{} {}", first, last),
-            (Some(first), None) => first.clone(),
-            (None, Some(last)) => last.clone(),
-            (None, None) => self.username.clone(),
-        }
-    }
-
-    pub fn validate_business_rules(&self) -> Result<(), String> {
-        if self.username.contains(' ') {
-            return Err("Username cannot contain spaces".to_string());
-        }
-
-        Ok(())
-    }
+    pub role: String,
 }

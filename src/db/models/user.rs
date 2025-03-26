@@ -11,6 +11,7 @@ pub struct Model {
     pub last_name: String,
     pub email: String,
     pub phone: String,
+    pub role: String,
     pub created_on: NaiveDateTime,
     pub updated_on: NaiveDateTime,
     pub deleted_on: Option<NaiveDateTime>,
