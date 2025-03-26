@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use validator::Validate;
 
-use crate::validators::user_validators::{PHONE_REGEX, validate_no_spaces};
+use crate::validators::user_validators::{PHONE_REGEX, validate_no_spaces, validate_role};
 
 use crate::db::models::UserActiveModel;
 use crate::db::repositories::UserRepository;
@@ -52,6 +52,7 @@ pub struct CreateUserRequest {
     pub phone: String,
 
     #[validate(length(max = 10, message = "Role cannot exceed 10 characters"))]
+    #[validate(custom(function = validate_role))]
     pub role: String,
 }
 
@@ -74,6 +75,7 @@ pub struct UpdateUserRequest {
     pub phone: Option<String>,
 
     #[validate(length(max = 10, message = "Role cannot exceed 10 characters"))]
+    #[validate(custom(function = validate_role))]
     pub role: Option<String>,
 }
 
