@@ -27,6 +27,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(TblUsers::LastName).string_len(20).not_null())
                     .col(ColumnDef::new(TblUsers::Email).string().not_null())
                     .col(ColumnDef::new(TblUsers::Phone).string_len(19).not_null())
+                    .col(ColumnDef::new(TblUsers::Role).string_len(10).not_null())
                     .col(ColumnDef::new(TblUsers::CreatedOn).timestamp().not_null())
                     .col(ColumnDef::new(TblUsers::UpdatedOn).timestamp().not_null())
                     .col(ColumnDef::new(TblUsers::DeletedOn).timestamp().null())
@@ -69,6 +70,7 @@ enum TblUsers {
     LastName,
     Email,
     Phone,
+    Role,
     CreatedOn,
     UpdatedOn,
     DeletedOn,

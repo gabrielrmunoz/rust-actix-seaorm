@@ -50,6 +50,9 @@ pub struct CreateUserRequest {
 
     #[validate(regex(path = *PHONE_REGEX, message = "Invalid phone number format"))]
     pub phone: String,
+
+    #[validate(length(max = 10, message = "Role cannot exceed 10 characters"))]
+    pub role: String,
 }
 
 #[derive(Deserialize, Serialize, Validate)]
@@ -69,6 +72,9 @@ pub struct UpdateUserRequest {
 
     #[validate(regex(path = *PHONE_REGEX, message = "Invalid phone number format"))]
     pub phone: Option<String>,
+
+    #[validate(length(max = 10, message = "Role cannot exceed 10 characters"))]
+    pub role: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -148,6 +154,7 @@ pub async fn create_user(
         last_name: Set(item.last_name.clone()),
         email: Set(item.email.clone()),
         phone: Set(item.phone.clone()),
+        role: Set(item.role.clone()),
         created_on: Set(now),
         updated_on: Set(now),
         ..Default::default()
@@ -219,6 +226,9 @@ pub async fn update_user(
             }
             if let Some(phone) = &item.phone {
                 active_model.phone = Set(phone.clone());
+            }
+            if let Some(role) = &item.role {
+                active_model.role = Set(role.clone());
             }
 
             active_model.updated_on = Set(Local::now().naive_local());
