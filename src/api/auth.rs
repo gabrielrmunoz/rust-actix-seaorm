@@ -2,13 +2,22 @@ use actix_web::{HttpResponse, web};
 use sea_orm::DbConn;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use validator::Validate;
 
 use crate::auth::generate_token;
 use crate::db::repositories::UserRepository;
 use crate::error::AppError;
 
-#[derive(Deserialize)]
+use crate::validators::user_validators::validate_no_spaces;
+
+#[derive(Deserialize, Validate)]
 pub struct LoginRequest {
+    #[validate(length(
+        min = 3,
+        max = 200,
+        message = "Username must be between 3 and 50 characters"
+    ))]
+    #[validate(custom(function = validate_no_spaces))]
     pub username: String,
     pub password: String,
 }
