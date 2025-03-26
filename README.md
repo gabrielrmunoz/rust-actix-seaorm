@@ -146,11 +146,11 @@ cd rust-actix-seaorm
 
 #### 2. Create a [.env](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html) file based on the example:
 ```
-    DATABASE_URL=postgres://username:password@localhost:5432/dbname
-    SERVER_HOST=127.0.0.1
-    SERVER_PORT=8000
-    RUST_LOG=info
-    JWT_SECRET=your_secret_key_here
+DATABASE_URL=postgres://username:password@localhost:5432/dbname
+SERVER_HOST=127.0.0.1
+SERVER_PORT=8000
+RUST_LOG=info
+JWT_SECRET=your_secret_key_here
 ```
 
 #### 3. Setup the database:
