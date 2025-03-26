@@ -12,6 +12,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use crate::db::models::user::Model;
 use crate::error::AppError;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]

@@ -119,21 +119,21 @@ pub async fn create_user(
         )));
     }
 
-    if let Some(_) = repo.find_by_username(&item.username).await? {
+    if let Some(_) = repo.find_by_username(item.username.clone()).await? {
         return Err(AppError::Validation(format!(
             "Username {} already exists",
             item.username
         )));
     }
 
-    if let Some(_) = repo.find_by_email(&item.email).await? {
+    if let Some(_) = repo.find_by_email(item.email.clone()).await? {
         return Err(AppError::Validation(format!(
             "Email {} already exists",
             item.email
         )));
     }
 
-    if let Some(_) = repo.find_by_phone(&item.phone).await? {
+    if let Some(_) = repo.find_by_phone(item.phone.clone()).await? {
         return Err(AppError::Validation(format!(
             "Phone {} already exists",
             item.phone
@@ -173,7 +173,7 @@ pub async fn update_user(
             return Err(AppError::Validation("Username cannot be empty".into()));
         }
 
-        if let Some(existing_user) = repo.find_by_username(username).await? {
+        if let Some(existing_user) = repo.find_by_username(username.clone()).await? {
             if existing_user.id != user_id {
                 return Err(AppError::Validation(format!(
                     "Username {} already exists",
@@ -188,7 +188,7 @@ pub async fn update_user(
             return Err(AppError::Validation("Email cannot be empty".into()));
         }
 
-        if let Some(existing_user) = repo.find_by_email(email).await? {
+        if let Some(existing_user) = repo.find_by_email(email.clone()).await? {
             if existing_user.id != user_id {
                 return Err(AppError::Validation(format!(
                     "Email {} already exists",

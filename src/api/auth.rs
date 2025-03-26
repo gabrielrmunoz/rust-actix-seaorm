@@ -31,7 +31,7 @@ async fn login(
 ) -> Result<HttpResponse, AppError> {
     let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
 
-    let user = match repo.find_by_username(&req.username).await? {
+    let user = match repo.find_by_username(req.username.clone()).await? {
         Some(user) => user,
         None => return Err(AppError::Unauthorized("Invalid credentials".into())),
     };
