@@ -11,8 +11,9 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use uuid::Uuid;
 
-use crate::db::models::user::Model;
+use crate::db::models::UserModel;
 use crate::error::AppError;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -69,6 +70,7 @@ pub struct Claims {
     pub sub: String,
     pub exp: usize,
     pub iat: usize,
+    pub refresh_token: String,
     pub user_id: i32,
     pub username: String,
     pub role: String,
@@ -92,24 +94,30 @@ static JWT_SECRET: Lazy<String> = Lazy::new(|| {
     std::env::var("JWT_SECRET").unwrap_or_else(|_| "default_jwt_secret_for_development_only".into())
 });
 
-pub fn generate_token(user: &Model) -> Result<String, AppError> {
+pub fn generate_claims(user: &UserModel) -> Claims {
     let expiration = Utc::now()
         .checked_add_signed(Duration::hours(24))
         .expect("valid timestamp")
         .timestamp() as usize;
 
-    let claims = Claims {
+    let iat = Utc::now().timestamp() as usize;
+    let refresh_token = generate_refresh_token();
+
+    Claims {
         sub: user.id.to_string(),
         exp: expiration,
-        iat: Utc::now().timestamp() as usize,
+        iat,
+        refresh_token,
         user_id: user.id,
         username: user.username.clone(),
         role: user.role.clone(),
-    };
+    }
+}
 
+pub fn generate_token_from_claims(claims: &Claims) -> Result<String, AppError> {
     encode(
         &Header::default(),
-        &claims,
+        claims,
         &EncodingKey::from_secret(JWT_SECRET.as_bytes()),
     )
     .map_err(|e| {
@@ -135,6 +143,10 @@ pub fn validate_token(token: &str) -> Result<TokenData<Claims>, AppError> {
     }
 
     Ok(token_data)
+}
+
+pub fn generate_refresh_token() -> String {
+    Uuid::new_v4().to_string()
 }
 
 pub struct JwtMiddleware;

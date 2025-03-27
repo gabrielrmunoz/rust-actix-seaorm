@@ -1,11 +1,14 @@
 use actix_web::{HttpResponse, web};
+use chrono::{DateTime, Utc};
+use sea_orm::ActiveValue::Set;
 use sea_orm::DbConn;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use validator::Validate;
 
-use crate::auth::{generate_token, verify_password};
-use crate::db::repositories::UserRepository;
+use crate::auth::{generate_claims, generate_token_from_claims, verify_password};
+use crate::db::models::RefreshTokenActiveModel;
+use crate::db::repositories::{RefreshTokenRepository, UserRepository};
 use crate::error::AppError;
 use crate::validators::user_validators::process_json_validation;
 
@@ -23,8 +26,14 @@ pub struct LoginResponse {
     pub role: String,
 }
 
+#[derive(Deserialize, Validate)]
+pub struct LogoutRequest {
+    pub refresh_token: String,
+}
+
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.route("/login", web::post().to(login));
+    cfg.route("/login", web::post().to(login))
+        .route("/logout", web::post().to(logout));
 }
 
 async fn login(
@@ -33,9 +42,12 @@ async fn login(
 ) -> Result<HttpResponse, AppError> {
     process_json_validation(&req)?;
 
-    let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
+    let user_repository = UserRepository::new(Arc::new(db.get_ref().clone()));
 
-    let user = match repo.find_by_username(req.username.clone()).await? {
+    let user = match user_repository
+        .find_by_username(req.username.clone())
+        .await?
+    {
         Some(user) => user,
         None => return Err(AppError::Unauthorized("Invalid credentials".into())),
     };
@@ -49,7 +61,21 @@ async fn login(
         return Err(AppError::Unauthorized("Account is disabled".into()));
     }
 
-    let token = generate_token(&user)?;
+    let claims = generate_claims(&user);
+    let token = generate_token_from_claims(&claims)?;
+
+    let refresh_token_repository = RefreshTokenRepository::new(Arc::new(db.get_ref().clone()));
+    let refresh_token = RefreshTokenActiveModel {
+        user_id: Set(user.id),
+        refresh_token: Set(claims.refresh_token),
+        created_on: Set(DateTime::<Utc>::from_timestamp(claims.iat as i64, 0)
+            .unwrap()
+            .naive_utc()),
+        revoked_on: Set(None),
+        ..Default::default()
+    };
+
+    refresh_token_repository.create(refresh_token).await?;
 
     Ok(HttpResponse::Ok().json(LoginResponse {
         token,
@@ -57,4 +83,24 @@ async fn login(
         username: user.username,
         role: user.role,
     }))
+}
+
+async fn logout(
+    db: web::Data<DbConn>,
+    req: web::Json<LogoutRequest>,
+) -> Result<HttpResponse, AppError> {
+    process_json_validation(&req)?;
+
+    let refresh_token_repository = RefreshTokenRepository::new(Arc::new(db.get_ref().clone()));
+    let refresh_token = refresh_token_repository
+        .find_by_refresh_token(req.refresh_token.clone())
+        .await?;
+
+    if let Some(refresh_token) = refresh_token {
+        refresh_token_repository.revoke(refresh_token.id).await?;
+    }
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "message": "Logged out successfully"
+    })))
 }

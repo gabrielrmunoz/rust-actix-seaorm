@@ -1,8 +1,9 @@
-use crate::db::models::{Model, UserActiveModel, UserColumn, UserEntity};
+use crate::db::models::{UserActiveModel, UserColumn, UserEntity, UserModel};
+use chrono::Local;
+use sea_orm::DeleteResult;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set,
 };
-use sea_orm::{DeleteResult, prelude::*};
 use std::sync::Arc;
 
 pub struct UserRepository {
@@ -14,7 +15,7 @@ impl UserRepository {
         Self { db }
     }
 
-    pub async fn find_all(&self, include_deleted: bool) -> Result<Vec<Model>, DbErr> {
+    pub async fn find_all(&self, include_deleted: bool) -> Result<Vec<UserModel>, DbErr> {
         let mut query = UserEntity::find();
 
         if !include_deleted {
@@ -24,36 +25,36 @@ impl UserRepository {
         query.all(self.db.as_ref()).await
     }
 
-    pub async fn find_by_id(&self, id: i32) -> Result<Option<Model>, DbErr> {
+    pub async fn find_by_id(&self, id: i32) -> Result<Option<UserModel>, DbErr> {
         UserEntity::find_by_id(id).one(self.db.as_ref()).await
     }
 
-    pub async fn find_by_username(&self, username: String) -> Result<Option<Model>, DbErr> {
+    pub async fn find_by_username(&self, username: String) -> Result<Option<UserModel>, DbErr> {
         UserEntity::find()
             .filter(UserColumn::Username.eq(username))
             .one(self.db.as_ref())
             .await
     }
 
-    pub async fn find_by_email(&self, email: String) -> Result<Option<Model>, DbErr> {
+    pub async fn find_by_email(&self, email: String) -> Result<Option<UserModel>, DbErr> {
         UserEntity::find()
             .filter(UserColumn::Email.eq(email))
             .one(self.db.as_ref())
             .await
     }
 
-    pub async fn find_by_phone(&self, phone: String) -> Result<Option<Model>, DbErr> {
+    pub async fn find_by_phone(&self, phone: String) -> Result<Option<UserModel>, DbErr> {
         UserEntity::find()
             .filter(UserColumn::Phone.eq(phone))
             .one(self.db.as_ref())
             .await
     }
 
-    pub async fn create(&self, model: UserActiveModel) -> Result<Model, DbErr> {
+    pub async fn create(&self, model: UserActiveModel) -> Result<UserModel, DbErr> {
         model.insert(self.db.as_ref()).await
     }
 
-    pub async fn update(&self, model: UserActiveModel) -> Result<Model, DbErr> {
+    pub async fn update(&self, model: UserActiveModel) -> Result<UserModel, DbErr> {
         model.update(self.db.as_ref()).await
     }
 
@@ -61,8 +62,9 @@ impl UserRepository {
         UserEntity::delete_by_id(id).exec(self.db.as_ref()).await
     }
 
-    pub async fn soft_delete(&self, id: i32, now: DateTime) -> Result<Option<Model>, DbErr> {
+    pub async fn soft_delete(&self, id: i32) -> Result<Option<UserModel>, DbErr> {
         let user = self.find_by_id(id).await?;
+        let now = Local::now().naive_local();
 
         if let Some(user) = user {
             let mut active_model: UserActiveModel = user.into();
@@ -75,8 +77,9 @@ impl UserRepository {
         }
     }
 
-    pub async fn restore(&self, id: i32, now: DateTime) -> Result<Option<Model>, DbErr> {
+    pub async fn restore(&self, id: i32) -> Result<Option<UserModel>, DbErr> {
         let user = self.find_by_id(id).await?;
+        let now = Local::now().naive_local();
 
         if let Some(user) = user {
             let mut active_model: UserActiveModel = user.into();

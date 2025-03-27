@@ -122,45 +122,45 @@ pub async fn get_user(
 
 pub async fn create_user(
     db: web::Data<DbConn>,
-    item: web::Json<CreateUserRequest>,
+    user: web::Json<CreateUserRequest>,
 ) -> Result<HttpResponse, AppError> {
-    process_json_validation(&item)?;
+    process_json_validation(&user)?;
 
-    info!("Attempting to create user with username: {}", item.username);
+    info!("Attempting to create user with username: {}", user.username);
 
     let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
 
-    if let Some(_) = repo.find_by_username(item.username.clone()).await? {
+    if let Some(_) = repo.find_by_username(user.username.clone()).await? {
         return Err(AppError::Validation(format!(
             "Username {} already exists",
-            item.username
+            user.username
         )));
     }
 
-    if let Some(_) = repo.find_by_email(item.email.clone()).await? {
+    if let Some(_) = repo.find_by_email(user.email.clone()).await? {
         return Err(AppError::Validation(format!(
             "Email {} already exists",
-            item.email
+            user.email
         )));
     }
 
-    if let Some(_) = repo.find_by_phone(item.phone.clone()).await? {
+    if let Some(_) = repo.find_by_phone(user.phone.clone()).await? {
         return Err(AppError::Validation(format!(
             "Phone {} already exists",
-            item.phone
+            user.phone
         )));
     }
 
     let now = Local::now().naive_local();
-    let hashed_password = hash_password(&item.password)?;
+    let hashed_password = hash_password(&user.password)?;
     let user_model = UserActiveModel {
-        username: Set(item.username.clone()),
+        username: Set(user.username.clone()),
         password: Set(hashed_password),
-        first_name: Set(item.first_name.clone()),
-        last_name: Set(item.last_name.clone()),
-        email: Set(item.email.clone()),
-        phone: Set(item.phone.clone()),
-        role: Set(item.role.clone()),
+        first_name: Set(user.first_name.clone()),
+        last_name: Set(user.last_name.clone()),
+        email: Set(user.email.clone()),
+        phone: Set(user.phone.clone()),
+        role: Set(user.role.clone()),
         created_on: Set(now),
         updated_on: Set(now),
         ..Default::default()
@@ -175,9 +175,9 @@ pub async fn create_user(
 pub async fn update_user(
     db: web::Data<DbConn>,
     path: web::Path<i32>,
-    item: web::Json<UpdateUserRequest>,
+    user: web::Json<UpdateUserRequest>,
 ) -> Result<HttpResponse, AppError> {
-    process_json_validation(&item)?;
+    process_json_validation(&user)?;
 
     let user_id = path.into_inner();
 
@@ -185,7 +185,7 @@ pub async fn update_user(
 
     let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
 
-    if let Some(ref username) = item.username {
+    if let Some(ref username) = user.username {
         if username.trim().is_empty() {
             return Err(AppError::Validation("Username cannot be empty".into()));
         }
@@ -200,7 +200,7 @@ pub async fn update_user(
         }
     }
 
-    if let Some(ref email) = item.email {
+    if let Some(ref email) = user.email {
         if email.trim().is_empty() {
             return Err(AppError::Validation("Email cannot be empty".into()));
         }
@@ -215,28 +215,28 @@ pub async fn update_user(
         }
     }
 
-    let user = repo.find_by_id(user_id).await?;
+    let user_data = repo.find_by_id(user_id).await?;
 
-    match user {
-        Some(user) => {
-            let mut active_model: UserActiveModel = user.into();
+    match user_data {
+        Some(user_data) => {
+            let mut active_model: UserActiveModel = user_data.into();
 
-            if let Some(username) = &item.username {
+            if let Some(username) = &user.username {
                 active_model.username = Set(username.clone());
             }
-            if let Some(first_name) = &item.first_name {
+            if let Some(first_name) = &user.first_name {
                 active_model.first_name = Set(first_name.clone());
             }
-            if let Some(last_name) = &item.last_name {
+            if let Some(last_name) = &user.last_name {
                 active_model.last_name = Set(last_name.clone());
             }
-            if let Some(email) = &item.email {
+            if let Some(email) = &user.email {
                 active_model.email = Set(email.clone());
             }
-            if let Some(phone) = &item.phone {
+            if let Some(phone) = &user.phone {
                 active_model.phone = Set(phone.clone());
             }
-            if let Some(role) = &item.role {
+            if let Some(role) = &user.role {
                 active_model.role = Set(role.clone());
             }
 
@@ -303,8 +303,7 @@ pub async fn delete_user_logical(
                 )));
             }
 
-            let now = Local::now().naive_local();
-            let result = repo.soft_delete(user_id, now).await?;
+            let result = repo.soft_delete(user_id).await?;
 
             if result.is_some() {
                 info!("User with ID {} successfully marked as deleted", user_id);
@@ -344,8 +343,7 @@ pub async fn restore_user(
                 )));
             }
 
-            let now = Local::now().naive_local();
-            let result = repo.restore(user_id, now).await?;
+            let result = repo.restore(user_id).await?;
 
             if result.is_some() {
                 info!("User with ID {} successfully restored", user_id);
