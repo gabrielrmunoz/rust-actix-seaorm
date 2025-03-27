@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use validator::Validate;
 
-use crate::auth::{generate_claims, generate_token_from_claims, verify_password};
+use crate::auth::jwt::generate_refresh_token;
+use crate::auth::{generate_claims, generate_token_from_claims, token_cache, verify_password};
 use crate::db::models::RefreshTokenActiveModel;
 use crate::db::repositories::{RefreshTokenRepository, UserRepository};
 use crate::error::AppError;
@@ -21,6 +22,7 @@ pub struct LoginRequest {
 #[derive(Serialize)]
 pub struct LoginResponse {
     pub token: String,
+    pub refresh_token: String,
     pub user_id: i32,
     pub username: String,
     pub role: String,
@@ -63,11 +65,12 @@ async fn login(
 
     let claims = generate_claims(&user);
     let token = generate_token_from_claims(&claims)?;
+    let refresh_token = generate_refresh_token();
 
     let refresh_token_repository = RefreshTokenRepository::new(Arc::new(db.get_ref().clone()));
-    let refresh_token = RefreshTokenActiveModel {
+    let active_model = RefreshTokenActiveModel {
         user_id: Set(user.id),
-        refresh_token: Set(claims.refresh_token),
+        refresh_token: Set(refresh_token.clone()),
         created_on: Set(DateTime::<Utc>::from_timestamp(claims.iat as i64, 0)
             .unwrap()
             .naive_utc()),
@@ -75,10 +78,12 @@ async fn login(
         ..Default::default()
     };
 
-    refresh_token_repository.create(refresh_token).await?;
+    refresh_token_repository.create(active_model).await?;
+    token_cache::cache_valid_token(user.id);
 
     Ok(HttpResponse::Ok().json(LoginResponse {
         token,
+        refresh_token,
         user_id: user.id,
         username: user.username,
         role: user.role,
@@ -98,6 +103,7 @@ async fn logout(
 
     if let Some(refresh_token) = refresh_token {
         refresh_token_repository.revoke(refresh_token.id).await?;
+        token_cache::set_token_revoked(refresh_token.user_id);
     }
 
     Ok(HttpResponse::Ok().json(serde_json::json!({

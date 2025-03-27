@@ -4,6 +4,7 @@ use chrono::{Duration, Utc};
 use futures::future::{Ready, ready};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
 use once_cell::sync::Lazy;
+use sea_orm::DbConn;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::future::Future;
@@ -13,6 +14,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use uuid::Uuid;
 
+use crate::auth::token_cache;
 use crate::db::models::UserModel;
 use crate::error::AppError;
 
@@ -70,7 +72,6 @@ pub struct Claims {
     pub sub: String,
     pub exp: usize,
     pub iat: usize,
-    pub refresh_token: String,
     pub user_id: i32,
     pub username: String,
     pub role: String,
@@ -101,13 +102,11 @@ pub fn generate_claims(user: &UserModel) -> Claims {
         .timestamp() as usize;
 
     let iat = Utc::now().timestamp() as usize;
-    let refresh_token = generate_refresh_token();
 
     Claims {
         sub: user.id.to_string(),
         exp: expiration,
         iat,
-        refresh_token,
         user_id: user.id,
         username: user.username.clone(),
         role: user.role.clone(),
@@ -126,7 +125,7 @@ pub fn generate_token_from_claims(claims: &Claims) -> Result<String, AppError> {
     })
 }
 
-pub fn validate_token(token: &str) -> Result<TokenData<Claims>, AppError> {
+pub async fn validate_token(token: &str, db: &DbConn) -> Result<TokenData<Claims>, AppError> {
     let token_data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(JWT_SECRET.as_bytes()),
@@ -142,6 +141,16 @@ pub fn validate_token(token: &str) -> Result<TokenData<Claims>, AppError> {
         return Err(AppError::Unauthorized("Invalid role in token".into()));
     }
 
+    let is_revoked = token_cache::is_token_revoked(token_data.claims.user_id, db).await?;
+
+    if is_revoked {
+        log::warn!(
+            "User {} tried to use a revoked token",
+            token_data.claims.user_id
+        );
+        return Err(AppError::Unauthorized("Session has been revoked".into()));
+    }
+
     Ok(token_data)
 }
 
@@ -149,7 +158,15 @@ pub fn generate_refresh_token() -> String {
     Uuid::new_v4().to_string()
 }
 
-pub struct JwtMiddleware;
+pub struct JwtMiddleware {
+    db: Arc<DbConn>,
+}
+
+impl JwtMiddleware {
+    pub fn new(db: Arc<DbConn>) -> Self {
+        Self { db }
+    }
+}
 
 impl<S, B> dev::Transform<S, dev::ServiceRequest> for JwtMiddleware
 where
@@ -166,12 +183,14 @@ where
     fn new_transform(&self, service: S) -> Self::Future {
         ready(Ok(JwtMiddlewareService {
             service: Arc::new(service),
+            db: self.db.clone(),
         }))
     }
 }
 
 pub struct JwtMiddlewareService<S> {
     service: Arc<S>,
+    db: Arc<DbConn>,
 }
 
 impl<S, B> dev::Service<dev::ServiceRequest> for JwtMiddlewareService<S>
@@ -190,6 +209,7 @@ where
 
     fn call(&self, req: dev::ServiceRequest) -> Self::Future {
         let service = self.service.clone();
+        let db = self.db.clone();
 
         if req.path() == "/api/auth/login"
             || req.path() == "/api/auth/register"
@@ -220,16 +240,21 @@ where
 
         let token = auth_str.trim_start_matches("Bearer ").trim();
 
-        let token_data = match validate_token(token) {
-            Ok(data) => data,
-            Err(_) => {
-                return Box::pin(async { Err(ErrorUnauthorized("Invalid or expired token")) });
-            }
-        };
+        let token_owned = token.to_owned();
 
-        req.extensions_mut().insert(token_data.claims);
+        Box::pin(async move {
+            let token_data = match validate_token(&token_owned, &db).await {
+                Ok(data) => data,
+                Err(e) => {
+                    log::warn!("Token validation failed: {:?}", e);
+                    return Err(ErrorUnauthorized("Invalid or expired token"));
+                }
+            };
 
-        Box::pin(async move { service.call(req).await })
+            req.extensions_mut().insert(token_data.claims);
+
+            service.call(req).await
+        })
     }
 }
 
