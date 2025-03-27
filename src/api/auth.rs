@@ -6,8 +6,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use validator::Validate;
 
-use crate::auth::jwt::generate_refresh_token;
-use crate::auth::{generate_claims, generate_token_from_claims, token_cache, verify_password};
+use crate::auth::jwt::{generate_claims, generate_refresh_token, generate_token_from_claims};
+use crate::auth::password::verify_password;
+use crate::auth::token_cache::{insert_cache_valid_token, set_token_revoked};
 use crate::db::models::RefreshTokenActiveModel;
 use crate::db::repositories::{RefreshTokenRepository, UserRepository};
 use crate::error::AppError;
@@ -79,7 +80,7 @@ async fn login(
     };
 
     refresh_token_repository.create(active_model).await?;
-    token_cache::cache_valid_token(user.id);
+    insert_cache_valid_token(user.id);
 
     Ok(HttpResponse::Ok().json(LoginResponse {
         token,
@@ -103,7 +104,7 @@ async fn logout(
 
     if let Some(refresh_token) = refresh_token {
         refresh_token_repository.revoke(refresh_token.id).await?;
-        token_cache::set_token_revoked(refresh_token.user_id);
+        set_token_revoked(refresh_token.user_id);
     }
 
     Ok(HttpResponse::Ok().json(serde_json::json!({

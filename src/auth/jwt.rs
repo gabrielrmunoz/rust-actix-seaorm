@@ -14,9 +14,10 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use uuid::Uuid;
 
-use crate::auth::token_cache;
 use crate::db::models::UserModel;
 use crate::error::AppError;
+
+use super::is_token_revoked;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -141,7 +142,7 @@ pub async fn validate_token(token: &str, db: &DbConn) -> Result<TokenData<Claims
         return Err(AppError::Unauthorized("Invalid role in token".into()));
     }
 
-    let is_revoked = token_cache::is_token_revoked(token_data.claims.user_id, db).await?;
+    let is_revoked = is_token_revoked(token_data.claims.user_id, db).await?;
 
     if is_revoked {
         log::warn!(
