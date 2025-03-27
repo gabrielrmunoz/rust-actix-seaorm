@@ -9,6 +9,7 @@ pub struct Model {
     pub user_id: i32,
     pub refresh_token: String,
     pub created_on: NaiveDateTime,
+    pub expires_on: NaiveDateTime,
     pub revoked_on: Option<NaiveDateTime>,
 }
 

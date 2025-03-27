@@ -66,11 +66,11 @@ impl<'a> UserRepository<'a> {
         let now = Local::now().naive_local();
 
         if let Some(user) = user {
-            let mut active_model: UserActiveModel = user.into();
-            active_model.deleted_on = Set(Some(now));
-            active_model.updated_on = Set(now);
+            let mut user_active_model: UserActiveModel = user.into();
+            user_active_model.deleted_on = Set(Some(now));
+            user_active_model.updated_on = Set(now);
 
-            Ok(Some(active_model.update(self.db).await?))
+            Ok(Some(user_active_model.update(self.db).await?))
         } else {
             Ok(None)
         }
@@ -81,11 +81,11 @@ impl<'a> UserRepository<'a> {
         let now = Local::now().naive_local();
 
         if let Some(user) = user {
-            let mut active_model: UserActiveModel = user.into();
-            active_model.deleted_on = Set(None);
-            active_model.updated_on = Set(now);
+            let mut user_active_model: UserActiveModel = user.into();
+            user_active_model.deleted_on = Set(None);
+            user_active_model.updated_on = Set(now);
 
-            Ok(Some(active_model.update(self.db).await?))
+            Ok(Some(user_active_model.update(self.db).await?))
         } else {
             Ok(None)
         }

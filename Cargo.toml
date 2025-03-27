@@ -10,7 +10,6 @@ actix-web-httpauth = "0.8.2"
 argon2 = "0.5.3"
 async-trait = "0.1.88"
 chrono = { version = "0.4.40", features = ["serde"] }
-dashmap = "6.1.0"
 dotenv = "0.15.0"
 env_logger = "0.11.7"
 futures = "0.3.31"

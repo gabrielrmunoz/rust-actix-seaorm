@@ -17,8 +17,6 @@ use uuid::Uuid;
 use crate::db::models::UserModel;
 use crate::error::AppError;
 
-use super::is_token_revoked;
-
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum UserRole {
@@ -57,7 +55,7 @@ impl FromStr for UserRole {
             "admin" => Ok(UserRole::Admin),
             "user" => Ok(UserRole::User),
             "guest" => Ok(UserRole::Guest),
-            _ => Err(format!("Unknown rol: {}", s)),
+            _ => Err(format!("Unknown role: {}", s)),
         }
     }
 }
@@ -140,16 +138,6 @@ pub async fn validate_token(token: &str, db: &DbConn) -> Result<TokenData<Claims
     if !UserRole::is_valid_role(&token_data.claims.role) {
         log::error!("Token contains invalid role: {}", token_data.claims.role);
         return Err(AppError::Unauthorized("Invalid role in token".into()));
-    }
-
-    let is_revoked = is_token_revoked(token_data.claims.user_id, db).await?;
-
-    if is_revoked {
-        log::warn!(
-            "User {} tried to use a revoked token",
-            token_data.claims.user_id
-        );
-        return Err(AppError::Unauthorized("Session has been revoked".into()));
     }
 
     Ok(token_data)
@@ -240,7 +228,6 @@ where
         }
 
         let token = auth_str.trim_start_matches("Bearer ").trim();
-
         let token_owned = token.to_owned();
 
         Box::pin(async move {
@@ -253,7 +240,6 @@ where
             };
 
             req.extensions_mut().insert(token_data.claims);
-
             service.call(req).await
         })
     }
@@ -359,6 +345,8 @@ where
                 let user_role_str = claims.role.to_lowercase();
                 user_role_str == required_role.as_str()
                     || (required_role == UserRole::User && user_role_str == "admin")
+                    || (required_role == UserRole::Guest
+                        && (user_role_str == "admin" || user_role_str == "user"))
             } else {
                 return Err(ErrorUnauthorized("User not authenticated"));
             };

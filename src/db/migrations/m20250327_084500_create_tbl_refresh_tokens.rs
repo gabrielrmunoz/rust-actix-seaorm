@@ -35,6 +35,11 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(
+                        ColumnDef::new(TblRefreshTokens::ExpiresOn)
+                            .timestamp()
+                            .not_null(),
+                    )
+                    .col(
                         ColumnDef::new(TblRefreshTokens::RevokedOn)
                             .timestamp()
                             .null(),
@@ -65,6 +70,7 @@ enum TblRefreshTokens {
     UserId,
     RefreshToken,
     CreatedOn,
+    ExpiresOn,
     RevokedOn,
 }
 

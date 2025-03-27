@@ -224,32 +224,32 @@ pub async fn update_user(
 
     match user_data {
         Some(user_data) => {
-            let mut active_model: UserActiveModel = user_data.into();
+            let mut user_active_model: UserActiveModel = user_data.into();
 
             let user = json_user.into_inner();
 
             if let Some(username) = user.username {
-                active_model.username = Set(username);
+                user_active_model.username = Set(username);
             }
             if let Some(first_name) = user.first_name {
-                active_model.first_name = Set(first_name);
+                user_active_model.first_name = Set(first_name);
             }
             if let Some(last_name) = user.last_name {
-                active_model.last_name = Set(last_name);
+                user_active_model.last_name = Set(last_name);
             }
             if let Some(email) = user.email {
-                active_model.email = Set(email);
+                user_active_model.email = Set(email);
             }
             if let Some(phone) = user.phone {
-                active_model.phone = Set(phone);
+                user_active_model.phone = Set(phone);
             }
             if let Some(role) = user.role {
-                active_model.role = Set(role);
+                user_active_model.role = Set(role);
             }
 
-            active_model.updated_on = Set(Local::now().naive_local());
+            user_active_model.updated_on = Set(Local::now().naive_local());
 
-            let updated_user = repo.update(active_model).await?;
+            let updated_user = repo.update(user_active_model).await?;
 
             info!("User with ID {} updated", user_id);
             Ok(HttpResponse::Ok().json(updated_user))

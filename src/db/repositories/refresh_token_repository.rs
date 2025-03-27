@@ -47,10 +47,10 @@ impl<'a> RefreshTokenRepository<'a> {
         let now = Local::now().naive_local();
 
         if let Some(token) = token {
-            let mut active_model: RefreshTokenActiveModel = token.into();
-            active_model.revoked_on = Set(Some(now));
+            let mut refresh_token_active_model: RefreshTokenActiveModel = token.into();
+            refresh_token_active_model.revoked_on = Set(Some(now));
 
-            Ok(Some(active_model.update(self.db).await?))
+            Ok(Some(refresh_token_active_model.update(self.db).await?))
         } else {
             Ok(None)
         }
@@ -64,10 +64,10 @@ impl<'a> RefreshTokenRepository<'a> {
         let now = Local::now().naive_local();
 
         if let Some(token) = token {
-            let mut active_model: RefreshTokenActiveModel = token.into();
-            active_model.revoked_on = Set(Some(now));
+            let mut refresh_token_active_model: RefreshTokenActiveModel = token.into();
+            refresh_token_active_model.revoked_on = Set(Some(now));
 
-            Ok(Some(active_model.update(self.db).await?))
+            Ok(Some(refresh_token_active_model.update(self.db).await?))
         } else {
             Ok(None)
         }
@@ -84,10 +84,10 @@ impl<'a> RefreshTokenRepository<'a> {
         let mut revoked_tokens = Vec::with_capacity(tokens.len());
 
         for token in tokens {
-            let mut active_model: RefreshTokenActiveModel = token.into();
-            active_model.revoked_on = Set(Some(now));
+            let mut refresh_token_active_model: RefreshTokenActiveModel = token.into();
+            refresh_token_active_model.revoked_on = Set(Some(now));
 
-            let updated = active_model.update(self.db).await?;
+            let updated = refresh_token_active_model.update(self.db).await?;
             revoked_tokens.push(updated);
         }
 
