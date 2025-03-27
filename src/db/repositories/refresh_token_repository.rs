@@ -56,7 +56,7 @@ impl<'a> RefreshTokenRepository<'a> {
         }
     }
 
-    pub async fn revoke_by_token(
+    pub async fn revoke_by_refresh_token(
         &self,
         refresh_token: &str,
     ) -> Result<Option<RefreshTokenModel>, DbErr> {

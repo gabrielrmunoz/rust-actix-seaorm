@@ -61,10 +61,12 @@ async fn login(
 
     let existing_refresh_token = refresh_token_repository.find_by_user_id(user.id).await?;
 
-    let refresh_token = if let Some(token) = existing_refresh_token {
-        if token.revoked_on.is_none() && token.expires_on > now {
+    let refresh_token = if let Some(refresh_token_active_model) = existing_refresh_token {
+        if refresh_token_active_model.revoked_on.is_none()
+            && refresh_token_active_model.expires_on > now
+        {
             log::info!("Reusing existing valid refresh token for user {}", user.id);
-            token.refresh_token
+            refresh_token_active_model.refresh_token
         } else {
             log::info!("Existing token is invalid for user {}", user.id);
             create_new_refresh_token(&refresh_token_repository, &user).await?

@@ -4,7 +4,6 @@ use chrono::{Duration, Utc};
 use futures::future::{Ready, ready};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
 use once_cell::sync::Lazy;
-use sea_orm::DbConn;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::future::Future;
@@ -96,7 +95,7 @@ static JWT_SECRET: Lazy<String> = Lazy::new(|| {
 
 pub fn generate_claims(user: &UserModel) -> Claims {
     let expiration = Utc::now()
-        .checked_add_signed(Duration::hours(24))
+        .checked_add_signed(Duration::minutes(15))
         .expect("valid timestamp")
         .timestamp() as usize;
 
@@ -124,7 +123,7 @@ pub fn generate_token_from_claims(claims: &Claims) -> Result<String, AppError> {
     })
 }
 
-pub async fn validate_token(token: &str, db: &DbConn) -> Result<TokenData<Claims>, AppError> {
+pub async fn validate_token(token: &str) -> Result<TokenData<Claims>, AppError> {
     let token_data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(JWT_SECRET.as_bytes()),
@@ -147,15 +146,7 @@ pub fn generate_refresh_token() -> String {
     Uuid::new_v4().to_string()
 }
 
-pub struct JwtMiddleware {
-    db: Arc<DbConn>,
-}
-
-impl JwtMiddleware {
-    pub fn new(db: Arc<DbConn>) -> Self {
-        Self { db }
-    }
-}
+pub struct JwtMiddleware;
 
 impl<S, B> dev::Transform<S, dev::ServiceRequest> for JwtMiddleware
 where
@@ -172,14 +163,12 @@ where
     fn new_transform(&self, service: S) -> Self::Future {
         ready(Ok(JwtMiddlewareService {
             service: Arc::new(service),
-            db: self.db.clone(),
         }))
     }
 }
 
 pub struct JwtMiddlewareService<S> {
     service: Arc<S>,
-    db: Arc<DbConn>,
 }
 
 impl<S, B> dev::Service<dev::ServiceRequest> for JwtMiddlewareService<S>
@@ -198,7 +187,6 @@ where
 
     fn call(&self, req: dev::ServiceRequest) -> Self::Future {
         let service = self.service.clone();
-        let db = self.db.clone();
 
         if req.path() == "/api/auth/login"
             || req.path() == "/api/auth/register"
@@ -231,7 +219,7 @@ where
         let token_owned = token.to_owned();
 
         Box::pin(async move {
-            let token_data = match validate_token(&token_owned, &db).await {
+            let token_data = match validate_token(&token_owned).await {
                 Ok(data) => data,
                 Err(e) => {
                     log::warn!("Token validation failed: {:?}", e);
