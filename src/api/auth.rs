@@ -3,7 +3,6 @@ use chrono::{DateTime, Utc};
 use sea_orm::ActiveValue::Set;
 use sea_orm::DbConn;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use validator::Validate;
 
 use crate::auth::jwt::{generate_claims, generate_refresh_token, generate_token_from_claims};
@@ -45,12 +44,9 @@ async fn login(
 ) -> Result<HttpResponse, AppError> {
     process_json_validation(&req)?;
 
-    let user_repository = UserRepository::new(Arc::new(db.get_ref().clone()));
+    let user_repository = UserRepository::new(db.get_ref());
 
-    let user = match user_repository
-        .find_by_username(req.username.clone())
-        .await?
-    {
+    let user = match user_repository.find_by_username(&req.username).await? {
         Some(user) => user,
         None => return Err(AppError::Unauthorized("Invalid credentials".into())),
     };
@@ -68,7 +64,7 @@ async fn login(
     let token = generate_token_from_claims(&claims)?;
     let refresh_token = generate_refresh_token();
 
-    let refresh_token_repository = RefreshTokenRepository::new(Arc::new(db.get_ref().clone()));
+    let refresh_token_repository = RefreshTokenRepository::new(db.get_ref());
     let active_model = RefreshTokenActiveModel {
         user_id: Set(user.id),
         refresh_token: Set(refresh_token.clone()),
@@ -97,9 +93,9 @@ async fn logout(
 ) -> Result<HttpResponse, AppError> {
     process_json_validation(&req)?;
 
-    let refresh_token_repository = RefreshTokenRepository::new(Arc::new(db.get_ref().clone()));
+    let refresh_token_repository = RefreshTokenRepository::new(db.get_ref());
     let refresh_token = refresh_token_repository
-        .find_by_refresh_token(req.refresh_token.clone())
+        .find_by_refresh_token(&req.refresh_token)
         .await?;
 
     if let Some(refresh_token) = refresh_token {

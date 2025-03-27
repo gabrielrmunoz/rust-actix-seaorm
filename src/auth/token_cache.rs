@@ -2,7 +2,6 @@ use dashmap::DashMap;
 use log;
 use once_cell::sync::Lazy;
 use sea_orm::DbConn;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::db::repositories::RefreshTokenRepository;
@@ -39,7 +38,7 @@ pub async fn is_token_revoked(user_id: i32, db: &DbConn) -> Result<bool, AppErro
         "Token cache miss for user_id: {}, querying database",
         user_id
     );
-    let refresh_token_repository = RefreshTokenRepository::new(Arc::new(db.clone()));
+    let refresh_token_repository = RefreshTokenRepository::new(db);
 
     let refresh_token = refresh_token_repository.find_by_user_id(user_id).await?;
 

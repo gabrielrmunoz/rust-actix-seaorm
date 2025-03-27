@@ -3,7 +3,6 @@ use log::{info, warn};
 use sea_orm::DbConn;
 use sea_orm::sqlx::types::chrono::Local;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use validator::Validate;
 
 use crate::auth::hash_password;
@@ -95,7 +94,7 @@ pub async fn get_users(
     query: web::Query<GetUsersParams>,
 ) -> Result<HttpResponse, AppError> {
     let include_deleted = query.include_deleted.unwrap_or(false);
-    let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
+    let repo = UserRepository::new(db.get_ref());
 
     let users = repo.find_all(include_deleted).await?;
 
@@ -107,7 +106,7 @@ pub async fn get_user(
     path: web::Path<i32>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = path.into_inner();
-    let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
+    let repo = UserRepository::new(db.get_ref());
 
     let user = repo.find_by_id(user_id).await?;
 
@@ -122,75 +121,81 @@ pub async fn get_user(
 
 pub async fn create_user(
     db: web::Data<DbConn>,
-    user: web::Json<CreateUserRequest>,
+    json_user: web::Json<CreateUserRequest>,
 ) -> Result<HttpResponse, AppError> {
-    process_json_validation(&user)?;
+    process_json_validation(&json_user)?;
 
-    info!("Attempting to create user with username: {}", user.username);
+    info!(
+        "Attempting to create user with username: {}",
+        json_user.username
+    );
 
-    let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
+    let repo = UserRepository::new(db.get_ref());
 
-    if let Some(_) = repo.find_by_username(user.username.clone()).await? {
+    if let Some(_) = repo.find_by_username(&json_user.username).await? {
         return Err(AppError::Validation(format!(
             "Username {} already exists",
-            user.username
+            json_user.username
         )));
     }
 
-    if let Some(_) = repo.find_by_email(user.email.clone()).await? {
+    if let Some(_) = repo.find_by_email(&json_user.email).await? {
         return Err(AppError::Validation(format!(
             "Email {} already exists",
-            user.email
+            json_user.email
         )));
     }
 
-    if let Some(_) = repo.find_by_phone(user.phone.clone()).await? {
+    if let Some(_) = repo.find_by_phone(&json_user.phone).await? {
         return Err(AppError::Validation(format!(
             "Phone {} already exists",
-            user.phone
+            json_user.phone
         )));
     }
 
     let now = Local::now().naive_local();
-    let hashed_password = hash_password(&user.password)?;
+    let hashed_password = hash_password(&json_user.password)?;
+
+    let user = json_user.into_inner();
+
     let user_model = UserActiveModel {
-        username: Set(user.username.clone()),
+        username: Set(user.username),
         password: Set(hashed_password),
-        first_name: Set(user.first_name.clone()),
-        last_name: Set(user.last_name.clone()),
-        email: Set(user.email.clone()),
-        phone: Set(user.phone.clone()),
-        role: Set(user.role.clone()),
+        first_name: Set(user.first_name),
+        last_name: Set(user.last_name),
+        email: Set(user.email),
+        phone: Set(user.phone),
+        role: Set(user.role),
         created_on: Set(now),
         updated_on: Set(now),
         ..Default::default()
     };
 
-    let user = repo.create(user_model).await?;
+    let created_user = repo.create(user_model).await?;
 
-    info!("User created with ID: {}", user.id);
-    Ok(HttpResponse::Created().json(user))
+    info!("User created with ID: {}", created_user.id);
+    Ok(HttpResponse::Created().json(created_user))
 }
 
 pub async fn update_user(
     db: web::Data<DbConn>,
     path: web::Path<i32>,
-    user: web::Json<UpdateUserRequest>,
+    json_user: web::Json<UpdateUserRequest>,
 ) -> Result<HttpResponse, AppError> {
-    process_json_validation(&user)?;
+    process_json_validation(&json_user)?;
 
     let user_id = path.into_inner();
 
     info!("Attempting to update user with ID: {}", user_id);
 
-    let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
+    let repo = UserRepository::new(db.get_ref());
 
-    if let Some(ref username) = user.username {
+    if let Some(ref username) = json_user.username {
         if username.trim().is_empty() {
             return Err(AppError::Validation("Username cannot be empty".into()));
         }
 
-        if let Some(existing_user) = repo.find_by_username(username.clone()).await? {
+        if let Some(existing_user) = repo.find_by_username(username).await? {
             if existing_user.id != user_id {
                 return Err(AppError::Validation(format!(
                     "Username {} already exists",
@@ -200,12 +205,12 @@ pub async fn update_user(
         }
     }
 
-    if let Some(ref email) = user.email {
+    if let Some(ref email) = json_user.email {
         if email.trim().is_empty() {
             return Err(AppError::Validation("Email cannot be empty".into()));
         }
 
-        if let Some(existing_user) = repo.find_by_email(email.clone()).await? {
+        if let Some(existing_user) = repo.find_by_email(email).await? {
             if existing_user.id != user_id {
                 return Err(AppError::Validation(format!(
                     "Email {} already exists",
@@ -221,23 +226,25 @@ pub async fn update_user(
         Some(user_data) => {
             let mut active_model: UserActiveModel = user_data.into();
 
-            if let Some(username) = &user.username {
-                active_model.username = Set(username.clone());
+            let user = json_user.into_inner();
+
+            if let Some(username) = user.username {
+                active_model.username = Set(username);
             }
-            if let Some(first_name) = &user.first_name {
-                active_model.first_name = Set(first_name.clone());
+            if let Some(first_name) = user.first_name {
+                active_model.first_name = Set(first_name);
             }
-            if let Some(last_name) = &user.last_name {
-                active_model.last_name = Set(last_name.clone());
+            if let Some(last_name) = user.last_name {
+                active_model.last_name = Set(last_name);
             }
-            if let Some(email) = &user.email {
-                active_model.email = Set(email.clone());
+            if let Some(email) = user.email {
+                active_model.email = Set(email);
             }
-            if let Some(phone) = &user.phone {
-                active_model.phone = Set(phone.clone());
+            if let Some(phone) = user.phone {
+                active_model.phone = Set(phone);
             }
-            if let Some(role) = &user.role {
-                active_model.role = Set(role.clone());
+            if let Some(role) = user.role {
+                active_model.role = Set(role);
             }
 
             active_model.updated_on = Set(Local::now().naive_local());
@@ -259,7 +266,7 @@ pub async fn delete_user_physical(
     path: web::Path<i32>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = path.into_inner();
-    let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
+    let repo = UserRepository::new(db.get_ref());
 
     info!("Attempting to physically delete user with ID: {}", user_id);
 
@@ -287,7 +294,7 @@ pub async fn delete_user_logical(
     path: web::Path<i32>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = path.into_inner();
-    let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
+    let repo = UserRepository::new(db.get_ref());
 
     info!("Attempting to logically delete user with ID: {}", user_id);
 
@@ -324,7 +331,7 @@ pub async fn restore_user(
     path: web::Path<i32>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = path.into_inner();
-    let repo = UserRepository::new(Arc::new(db.get_ref().clone()));
+    let repo = UserRepository::new(db.get_ref());
 
     info!(
         "Attempting to restore logically deleted user with ID: {}",
