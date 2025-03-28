@@ -12,6 +12,7 @@ pub struct ErrorResponse {
 #[derive(Debug)]
 pub enum AppError {
     Database(DbErr),
+    Forbidden(String),
     Validation(String),
     NotFound(String),
     Unauthorized(String),
@@ -22,6 +23,7 @@ impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Database(err) => write!(f, "Database error: {}", err),
+            Self::Forbidden(msg) => write!(f, "Forbidden: {}", msg),
             Self::Validation(msg) => write!(f, "Validation error: {}", msg),
             Self::NotFound(msg) => write!(f, "Not found: {}", msg),
             Self::Unauthorized(msg) => write!(f, "Unauthorized: {}", msg),
@@ -40,6 +42,10 @@ impl ResponseError for AppError {
                     message: "An internal error occurred".into(),
                 })
             }
+            AppError::Forbidden(msg) => HttpResponse::Forbidden().json(ErrorResponse {
+                status: "error".into(),
+                message: msg.clone(),
+            }),
             AppError::Validation(msg) => HttpResponse::BadRequest().json(ErrorResponse {
                 status: "error".into(),
                 message: msg.clone(),

@@ -12,7 +12,7 @@ use crate::db::models::{RefreshTokenActiveModel, UserModel};
 use crate::db::repositories::{RefreshTokenRepository, UserRepository};
 use crate::error::AppError;
 use crate::redis::get_connection;
-use crate::redis::token_store::{register_token, revoke_all_user_tokens, revoke_token};
+use crate::redis::token_store::{get_user_sessions_count, register_token, revoke_all_user_tokens, revoke_token};
 use crate::validators::user_validators::process_json_validation;
 
 #[derive(Deserialize, Validate)]
@@ -57,6 +57,35 @@ async fn login(
 
     if user.deleted_on.is_some() {
         return Err(AppError::Unauthorized("Account is disabled".into()));
+    }
+
+    let has_active_tokens = match get_connection().await {
+        Ok(mut conn) => {
+            match get_user_sessions_count(&mut conn, user.id).await {
+                Ok(count) => {
+                    if count > 0 {
+                        log::warn!("User {} already has {} active sessions", user.id, count);
+                        true
+                    } else {
+                        false
+                    }
+                },
+                Err(e) => {
+                    log::error!("Failed to check active sessions: {}", e);
+                    false
+                }
+            }
+        },
+        Err(e) => {
+            log::error!("Failed to connect to Redis during login: {}", e);
+            false
+        }
+    };
+
+    if has_active_tokens {
+        return Err(AppError::Forbidden(
+            "You already have an active session. Please logout from other devices first.".into()
+        ));
     }
 
     let refresh_token_repository = RefreshTokenRepository::new(db.get_ref());
