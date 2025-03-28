@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, web};
+use actix_web::{web, HttpRequest, HttpResponse};
 use chrono::{DateTime, Utc};
 use sea_orm::ActiveValue::Set;
 use sea_orm::DbConn;
@@ -7,9 +7,12 @@ use validator::Validate;
 
 use crate::auth::jwt::{generate_claims, generate_uuid, generate_token_from_claims};
 use crate::auth::password::verify_password;
-use crate::db::models::RefreshTokenActiveModel;
+use crate::auth::extract_claims_from_header;
+use crate::db::models::{RefreshTokenActiveModel, UserModel};
 use crate::db::repositories::{RefreshTokenRepository, UserRepository};
 use crate::error::AppError;
+use crate::redis::get_connection;
+use crate::redis::token_store::{register_token, revoke_all_user_tokens, revoke_token};
 use crate::validators::user_validators::process_json_validation;
 
 #[derive(Deserialize, Validate)]
@@ -24,9 +27,9 @@ pub struct LoginResponse {
     pub refresh_token: String,
 }
 
-#[derive(Deserialize, Validate)]
+#[derive(Deserialize)]
 pub struct LogoutRequest {
-    pub user_id: i32,
+    pub revoke_all: Option<bool>,
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
@@ -68,7 +71,7 @@ async fn login(
             log::info!("Reusing existing valid refresh token for user {}", user.id);
             refresh_token_active_model.refresh_token
         } else {
-            log::info!("Existing token is invalid for user {}", user.id);
+            log::info!("Existing refresh token is invalid for user {}", user.id);
             create_new_refresh_token(&refresh_token_repository, &user).await?
         }
     } else {
@@ -78,6 +81,23 @@ async fn login(
 
     let claims = generate_claims(&user);
     let token = generate_token_from_claims(&claims)?;
+    let expires_in_secs = claims.exp.saturating_sub(claims.iat);
+
+    match get_connection().await {
+        Ok(mut conn) => {
+            if let Err(e) = register_token(
+                &mut conn,
+                user.id,
+                &claims.jti,
+                expires_in_secs
+            ).await {
+                log::error!("Failed to register token in Redis: {}", e);
+            }
+        },
+        Err(e) => {
+            log::error!("Failed to connect to Redis during login: {}", e);
+        }
+    }
 
     Ok(HttpResponse::Ok().json(LoginResponse {
         token,
@@ -87,7 +107,7 @@ async fn login(
 
 async fn create_new_refresh_token(
     repository: &RefreshTokenRepository<'_>,
-    user: &crate::db::models::UserModel,
+    user: &UserModel,
 ) -> Result<String, AppError> {
     let claims = generate_claims(user);
     let refresh_token = generate_uuid();
@@ -116,21 +136,38 @@ async fn create_new_refresh_token(
 }
 
 async fn logout(
-    db: web::Data<DbConn>,
-    req: web::Json<LogoutRequest>,
+    req: HttpRequest,
+    logout_req: web::Json<LogoutRequest>,
 ) -> Result<HttpResponse, AppError> {
-    process_json_validation(&req)?;
-
-    let refresh_token_repository = RefreshTokenRepository::new(db.get_ref());
-    let refresh_token = refresh_token_repository
-        .find_by_user_id(req.user_id)
-        .await?;
-
-    if let Some(refresh_token) = refresh_token {
-        refresh_token_repository.revoke(refresh_token.id).await?;
+    let claims = extract_claims_from_header(&req).await?;
+    
+    match get_connection().await {
+        Ok(mut conn) => {
+            if logout_req.revoke_all.unwrap_or(false) {
+                if let Err(e) = revoke_all_user_tokens(
+                    &mut conn,
+                    claims.user_id
+                ).await {
+                    log::error!("Failed to revoke all tokens: {}", e);
+                    return Err(AppError::InternalServerError);
+                }
+            } else {
+                if let Err(e) = revoke_token(
+                    &mut conn,
+                    &claims.jti
+                ).await {
+                    log::error!("Failed to revoke token: {}", e);
+                    return Err(AppError::InternalServerError);
+                }
+            }
+        },
+        Err(e) => {
+            log::error!("Failed to connect to Redis during logout: {}", e);
+            return Err(AppError::InternalServerError);
+        }
     }
-
+    
     Ok(HttpResponse::Ok().json(serde_json::json!({
-        "message": "Logged out successfully"
+        "message": "Successfully logged out"
     })))
 }

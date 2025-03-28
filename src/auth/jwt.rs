@@ -1,5 +1,5 @@
 use actix_web::error::ErrorUnauthorized;
-use actix_web::{Error, HttpMessage, dev};
+use actix_web::{dev, Error, HttpMessage, HttpRequest};
 use chrono::{Duration, Utc};
 use futures::future::{Ready, ready};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
@@ -15,6 +15,8 @@ use uuid::Uuid;
 
 use crate::db::models::UserModel;
 use crate::error::AppError;
+use crate::redis::get_connection;
+use crate::redis::token_store::is_token_valid;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -126,6 +128,24 @@ pub fn generate_token_from_claims(claims: &Claims) -> Result<String, AppError> {
     })
 }
 
+pub async fn extract_claims_from_header(req: &HttpRequest) -> Result<Claims, AppError> {
+    let auth_header = req.headers().get("Authorization")
+        .ok_or_else(|| AppError::Unauthorized("Authorization header not found".into()))?;
+    
+    let auth_str = auth_header.to_str()
+        .map_err(|_| AppError::Unauthorized("Invalid authorization header format".into()))?;
+    
+    if !auth_str.starts_with("Bearer ") {
+        return Err(AppError::Unauthorized("Invalid authorization header format".into()));
+    }
+    
+    let token = auth_str.trim_start_matches("Bearer ").trim();
+    
+    let token_data = validate_token(token).await?;
+    
+    Ok(token_data.claims)
+}
+
 pub async fn validate_token(token: &str) -> Result<TokenData<Claims>, AppError> {
     let token_data = decode::<Claims>(
         token,
@@ -140,6 +160,25 @@ pub async fn validate_token(token: &str) -> Result<TokenData<Claims>, AppError> 
     if !UserRole::is_valid_role(&token_data.claims.role) {
         log::error!("Token contains invalid role: {}", token_data.claims.role);
         return Err(AppError::Unauthorized("Invalid role in token".into()));
+    }
+
+    match get_connection().await {
+        Ok(mut conn) => {
+            match is_token_valid(&mut conn, &token_data.claims.jti).await {
+                Ok(is_valid) => {
+                    if !is_valid {
+                        log::warn!("Token with ID {} has been revoked", token_data.claims.jti);
+                        return Err(AppError::Unauthorized("Token has been revoked".into()));
+                    }
+                },
+                Err(e) => {
+                    log::error!("Error checking token in Redis: {}", e);
+                }
+            }
+        },
+        Err(e) => {
+            log::error!("Failed to connect to Redis during token validation: {}", e);
+        }
     }
 
     Ok(token_data)
