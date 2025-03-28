@@ -3,6 +3,7 @@ pub mod auth;
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod middleware;
 pub mod redis;
 pub mod validators;
 
@@ -39,22 +40,25 @@ async fn main() -> io::Result<()> {
         .unwrap_or_else(|_| "3".to_string())
         .parse::<usize>()
         .unwrap_or(3);
-        
+
     if let Ok(mut conn) = get_connection().await {
         if let Err(e) = set_max_sessions(&mut conn, max_sessions).await {
             log::error!("Failed to set max sessions in Redis: {}", e);
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                format!("Failed to configure Redis: {}", e)
+                format!("Failed to configure Redis: {}", e),
             ));
         } else {
-            log::info!("Set maximum concurrent sessions per user to {}", max_sessions);
+            log::info!(
+                "Set maximum concurrent sessions per user to {}",
+                max_sessions
+            );
         }
     } else {
         log::error!("Failed to obtain Redis connection for configuration");
         return Err(io::Error::new(
             io::ErrorKind::ConnectionRefused,
-            "Redis connection failed during configuration"
+            "Redis connection failed during configuration",
         ));
     }
 

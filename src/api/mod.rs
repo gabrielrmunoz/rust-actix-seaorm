@@ -1,7 +1,8 @@
-use crate::auth::jwt::{JwtMiddleware, RoleGuard};
 use actix_web::web::ServiceConfig;
 use actix_web::{HttpResponse, web};
 use sea_orm::DbConn;
+
+use crate::middleware::{JwtMiddleware, RoleGuard};
 
 mod auth;
 mod users;
