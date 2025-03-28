@@ -4,7 +4,7 @@ use sea_orm::DbConn;
 
 use crate::middleware::{JwtMiddleware, RoleGuard};
 
-mod auth;
+pub mod auth;
 mod users;
 
 pub fn configure_routes(cfg: &mut ServiceConfig, db: DbConn) {

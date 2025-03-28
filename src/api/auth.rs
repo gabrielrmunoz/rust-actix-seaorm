@@ -1,18 +1,20 @@
-use actix_web::{web, HttpRequest, HttpResponse};
+use actix_web::{HttpRequest, HttpResponse, web};
 use chrono::{DateTime, Utc};
 use sea_orm::ActiveValue::Set;
 use sea_orm::DbConn;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::auth::jwt::{generate_claims, generate_uuid, generate_token_from_claims};
+use crate::auth::jwt::{generate_claims, generate_token_from_claims, generate_uuid};
 use crate::auth::password::verify_password;
-use crate::auth::extract_claims_from_header;
+use crate::auth::{Claims, extract_claims_from_header};
 use crate::db::models::{RefreshTokenActiveModel, UserModel};
 use crate::db::repositories::{RefreshTokenRepository, UserRepository};
 use crate::error::AppError;
 use crate::redis::get_connection;
-use crate::redis::token_store::{get_user_sessions_count, register_token, revoke_all_user_tokens, revoke_token};
+use crate::redis::token_store::{
+    get_user_sessions_count, register_token, revoke_all_user_tokens, revoke_token,
+};
 use crate::validators::user_validators::process_json_validation;
 
 #[derive(Deserialize, Validate)]
@@ -37,30 +39,32 @@ pub struct RefreshTokenRequest {
     pub refresh_token: String,
 }
 
-
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.route("/login", web::post().to(login))
-        .route("/logout", web::post().to(logout))
-        .route("/refresh", web::post().to(refresh_token));
+        .route("/logout", web::post().to(logout));
 }
 
-async fn refresh_token(
-    db: web::Data<DbConn>,
-    req: web::Json<RefreshTokenRequest>,
-) -> Result<HttpResponse, AppError> {
-    let refresh_token_repository = RefreshTokenRepository::new(db.get_ref());
-    let user_repository = UserRepository::new(db.get_ref());
-    
+pub async fn refresh_token(
+    db: &DbConn,
+    refresh_token_str: &str,
+) -> Result<(String, Claims), AppError> {
+    let refresh_token_repository = RefreshTokenRepository::new(db);
+    let user_repository = UserRepository::new(db);
+
+    // Find and validate refresh token
     let refresh_token_model = refresh_token_repository
-        .find_by_refresh_token(&req.refresh_token)
+        .find_by_refresh_token(refresh_token_str)
         .await?
         .ok_or_else(|| AppError::Unauthorized("Invalid refresh token".into()))?;
-    
+
     let now = Utc::now().naive_utc();
     if refresh_token_model.revoked_on.is_some() || refresh_token_model.expires_on <= now {
-        return Err(AppError::Unauthorized("Refresh token expired or revoked".into()));
+        return Err(AppError::Unauthorized(
+            "Refresh token expired or revoked".into(),
+        ));
     }
 
+    // Get user information
     let user = user_repository
         .find_by_id(refresh_token_model.user_id)
         .await?
@@ -70,30 +74,24 @@ async fn refresh_token(
         return Err(AppError::Unauthorized("Account is disabled".into()));
     }
 
+    // Generate new JWT token
     let claims = generate_claims(&user);
     let token = generate_token_from_claims(&claims)?;
     let expires_in_secs = claims.exp.saturating_sub(claims.iat);
 
+    // Register token in Redis
     match get_connection().await {
         Ok(mut conn) => {
-            if let Err(e) = register_token(
-                &mut conn,
-                user.id,
-                &claims.jti,
-                expires_in_secs
-            ).await {
+            if let Err(e) = register_token(&mut conn, user.id, &claims.jti, expires_in_secs).await {
                 log::error!("Failed to register refreshed token in Redis: {}", e);
             }
-        },
+        }
         Err(e) => {
             log::error!("Failed to connect to Redis during token refresh: {}", e);
         }
     }
 
-    Ok(HttpResponse::Ok().json(serde_json::json!({
-        "token": token,
-        "message": "Token refreshed successfully"
-    })))
+    Ok((token, claims))
 }
 
 async fn login(
@@ -119,20 +117,18 @@ async fn login(
     }
 
     let has_active_tokens = match get_connection().await {
-        Ok(mut conn) => {
-            match get_user_sessions_count(&mut conn, user.id).await {
-                Ok(count) => {
-                    if count > 0 {
-                        log::warn!("User {} already has {} active sessions", user.id, count);
-                        true
-                    } else {
-                        false
-                    }
-                },
-                Err(e) => {
-                    log::error!("Failed to check active sessions: {}", e);
+        Ok(mut conn) => match get_user_sessions_count(&mut conn, user.id).await {
+            Ok(count) => {
+                if count > 0 {
+                    log::warn!("User {} already has {} active sessions", user.id, count);
+                    true
+                } else {
                     false
                 }
+            }
+            Err(e) => {
+                log::error!("Failed to check active sessions: {}", e);
+                false
             }
         },
         Err(e) => {
@@ -143,7 +139,7 @@ async fn login(
 
     if has_active_tokens {
         return Err(AppError::Forbidden(
-            "You already have an active session. Please logout from other devices first.".into()
+            "You already have an active session. Please logout from other devices first.".into(),
         ));
     }
 
@@ -173,15 +169,10 @@ async fn login(
 
     match get_connection().await {
         Ok(mut conn) => {
-            if let Err(e) = register_token(
-                &mut conn,
-                user.id,
-                &claims.jti,
-                expires_in_secs
-            ).await {
+            if let Err(e) = register_token(&mut conn, user.id, &claims.jti, expires_in_secs).await {
                 log::error!("Failed to register token in Redis: {}", e);
             }
-        },
+        }
         Err(e) => {
             log::error!("Failed to connect to Redis during login: {}", e);
         }
@@ -228,33 +219,27 @@ async fn logout(
     logout_req: web::Json<LogoutRequest>,
 ) -> Result<HttpResponse, AppError> {
     let claims = extract_claims_from_header(&req).await?;
-    
+
     match get_connection().await {
         Ok(mut conn) => {
             if logout_req.revoke_all.unwrap_or(false) {
-                if let Err(e) = revoke_all_user_tokens(
-                    &mut conn,
-                    claims.user_id
-                ).await {
+                if let Err(e) = revoke_all_user_tokens(&mut conn, claims.user_id).await {
                     log::error!("Failed to revoke all tokens: {}", e);
                     return Err(AppError::InternalServerError);
                 }
             } else {
-                if let Err(e) = revoke_token(
-                    &mut conn,
-                    &claims.jti
-                ).await {
+                if let Err(e) = revoke_token(&mut conn, &claims.jti).await {
                     log::error!("Failed to revoke token: {}", e);
                     return Err(AppError::InternalServerError);
                 }
             }
-        },
+        }
         Err(e) => {
             log::error!("Failed to connect to Redis during logout: {}", e);
             return Err(AppError::InternalServerError);
         }
     }
-    
+
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "message": "Successfully logged out"
     })))
