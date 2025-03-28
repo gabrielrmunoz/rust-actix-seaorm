@@ -1,9 +1,12 @@
+use actix_service::{Service, Transform};
+use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::error::ErrorUnauthorized;
 use actix_web::{dev, Error, HttpMessage, HttpRequest};
 use chrono::{Duration, Utc};
 use futures::future::{Ready, ready};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
 use once_cell::sync::Lazy;
+use sea_orm::DbConn;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::future::Future;
@@ -16,7 +19,7 @@ use uuid::Uuid;
 use crate::db::models::UserModel;
 use crate::error::AppError;
 use crate::redis::get_connection;
-use crate::redis::token_store::is_token_valid;
+use crate::redis::token_store::{is_token_valid, register_token};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -389,6 +392,159 @@ where
                     required_role
                 )))
             }
+        })
+    }
+}
+
+pub struct AutoRefreshMiddleware {
+    pub db: Arc<DbConn>,
+}
+
+impl AutoRefreshMiddleware {
+    pub fn new(db: DbConn) -> Self {
+        Self {
+            db: Arc::new(db),
+        }
+    }
+}
+
+impl<S, B> Transform<S, ServiceRequest> for AutoRefreshMiddleware
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<B>;
+    type Error = Error;
+    type Transform = AutoRefreshMiddlewareService<S>;
+    type InitError = ();
+    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+
+    fn new_transform(&self, service: S) -> Self::Future {
+        ready(Ok(AutoRefreshMiddlewareService {
+            service: Arc::new(service),
+            db: self.db.clone(),
+        }))
+    }
+}
+
+pub struct AutoRefreshMiddlewareService<S> {
+    service: Arc<S>,
+    db: Arc<DbConn>,
+}
+
+impl<S, B> Service<ServiceRequest> for AutoRefreshMiddlewareService<S>
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<B>;
+    type Error = Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
+
+    fn poll_ready(&self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.service.poll_ready(cx)
+    }
+
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        if req.path() == "/api/auth/login" 
+            || req.path() == "/api/auth/register" 
+            || req.path() == "/api/auth/refresh"
+            || req.path() == "/health" 
+        {
+            return Box::pin(self.service.call(req));
+        }
+
+        let auth_header = req.headers().get("Authorization");
+        if auth_header.is_none() {
+            return Box::pin(self.service.call(req));
+        }
+
+        let auth_str = match auth_header.unwrap().to_str() {
+            Ok(s) => s,
+            Err(_) => return Box::pin(self.service.call(req)),
+        };
+
+        if !auth_str.starts_with("Bearer ") {
+            return Box::pin(self.service.call(req));
+        }
+
+        let token = auth_str.trim_start_matches("Bearer ").trim();
+        let db = self.db.clone();
+        let service = self.service.clone();
+
+        Box::pin(async move {
+            let validation = Validation {
+                validate_exp: false,
+                ..Validation::default()
+            };
+
+            let token_data = match decode::<Claims>(
+                token,
+                &DecodingKey::from_secret(JWT_SECRET.as_bytes()),
+                &validation,
+            ) {
+                Ok(data) => data,
+                Err(_) => {
+                    return service.call(req).await;
+                }
+            };
+
+            let claims = token_data.claims;
+            
+            let current_time = chrono::Utc::now().timestamp() as usize;
+            if claims.exp > current_time {
+                req.extensions_mut().insert(claims);
+                return service.call(req).await;
+            }
+            
+            log::info!("Token expired for user_id: {}, attempting auto-refresh", claims.user_id);
+            
+            let refresh_token_repository = RefreshTokenRepository::new(&db);
+            let user_repository = UserRepository::new(&db);
+            
+            let refresh_token_result = refresh_token_repository.find_by_user_id(claims.user_id).await;
+            
+            if let Ok(Some(refresh_token)) = refresh_token_result {
+                let now = chrono::Utc::now().naive_utc();
+                
+                if refresh_token.revoked_on.is_none() && refresh_token.expires_on > now {
+                    let user_result = user_repository.find_by_id(claims.user_id).await;
+                    
+                    if let Ok(Some(user)) = user_result {
+                        if user.deleted_on.is_none() {
+                            let new_claims = generate_claims(&user);
+                            if let Ok(new_token) = generate_token_from_claims(&new_claims) {
+                                let expires_in_secs = new_claims.exp.saturating_sub(new_claims.iat);
+                                
+                                if let Ok(mut conn) = get_connection().await {
+                                    let _ = register_token(
+                                        &mut conn,
+                                        user.id,
+                                        &new_claims.jti,
+                                        expires_in_secs
+                                    ).await;
+                                }
+                                
+                                let mut headers = req.headers_mut();
+                                headers.insert(
+                                    actix_web::http::header::AUTHORIZATION,
+                                    actix_web::http::header::HeaderValue::from_str(
+                                        &format!("Bearer {}", new_token)
+                                    ).unwrap(),
+                                );
+                                
+                                req.extensions_mut().insert(new_claims);
+                                
+                                log::info!("Successfully auto-refreshed token for user_id: {}", claims.user_id);
+                                return service.call(req).await;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            log::warn!("Failed to auto-refresh token for user_id: {}", claims.user_id);
+            service.call(req).await
         })
     }
 }

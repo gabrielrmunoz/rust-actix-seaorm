@@ -32,9 +32,68 @@ pub struct LogoutRequest {
     pub revoke_all: Option<bool>,
 }
 
+#[derive(Deserialize, Validate)]
+pub struct RefreshTokenRequest {
+    pub refresh_token: String,
+}
+
+
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.route("/login", web::post().to(login))
-        .route("/logout", web::post().to(logout));
+        .route("/logout", web::post().to(logout))
+        .route("/refresh", web::post().to(refresh_token));
+}
+
+async fn refresh_token(
+    db: web::Data<DbConn>,
+    req: web::Json<RefreshTokenRequest>,
+) -> Result<HttpResponse, AppError> {
+    let refresh_token_repository = RefreshTokenRepository::new(db.get_ref());
+    let user_repository = UserRepository::new(db.get_ref());
+    
+    let refresh_token_model = refresh_token_repository
+        .find_by_refresh_token(&req.refresh_token)
+        .await?
+        .ok_or_else(|| AppError::Unauthorized("Invalid refresh token".into()))?;
+    
+    let now = Utc::now().naive_utc();
+    if refresh_token_model.revoked_on.is_some() || refresh_token_model.expires_on <= now {
+        return Err(AppError::Unauthorized("Refresh token expired or revoked".into()));
+    }
+
+    let user = user_repository
+        .find_by_id(refresh_token_model.user_id)
+        .await?
+        .ok_or_else(|| AppError::Unauthorized("User not found".into()))?;
+
+    if user.deleted_on.is_some() {
+        return Err(AppError::Unauthorized("Account is disabled".into()));
+    }
+
+    let claims = generate_claims(&user);
+    let token = generate_token_from_claims(&claims)?;
+    let expires_in_secs = claims.exp.saturating_sub(claims.iat);
+
+    match get_connection().await {
+        Ok(mut conn) => {
+            if let Err(e) = register_token(
+                &mut conn,
+                user.id,
+                &claims.jti,
+                expires_in_secs
+            ).await {
+                log::error!("Failed to register refreshed token in Redis: {}", e);
+            }
+        },
+        Err(e) => {
+            log::error!("Failed to connect to Redis during token refresh: {}", e);
+        }
+    }
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "token": token,
+        "message": "Token refreshed successfully"
+    })))
 }
 
 async fn login(
