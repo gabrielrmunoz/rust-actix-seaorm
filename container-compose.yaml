@@ -23,24 +23,44 @@ services:
           memory: 1G
     command: ["postgres", "-c", "max_connections=200", "-c", "shared_buffers=256MB"]
 
-  rust-api:
-    build: .
-    container_name: rust-api-container
+  redis:
+    image: redis/redis-stack:latest
+    container_name: redis-container
     ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/postgres
-      - SERVER_HOST=0.0.0.0
-      - SERVER_PORT=8000
+      - "6379:6379"
+      - "8001:8001"
+    volumes:
+      - redis-data:/data
     restart: unless-stopped
     deploy:
       resources:
         limits:
           cpus: "0.5"
           memory: 1G
-    depends_on:
-      - postgres
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+
+  # rust-api:
+  #   build: .
+  #   container_name: rust-api-container
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - DATABASE_URL=postgres://postgres:postgres@postgres:5432/postgres
+  #     - SERVER_HOST=0.0.0.0
+  #     - SERVER_PORT=8000
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: "0.5"
+  #         memory: 1G
+  #   depends_on:
+  #     - postgres
 
 volumes:
   postgres-data:
+    driver: local
+  redis-data:
     driver: local

@@ -70,6 +70,7 @@ pub struct Claims {
     pub sub: String,
     pub exp: usize,
     pub iat: usize,
+    pub jti: String,
     pub user_id: i32,
     pub username: String,
     pub role: String,
@@ -100,11 +101,13 @@ pub fn generate_claims(user: &UserModel) -> Claims {
         .timestamp() as usize;
 
     let iat = Utc::now().timestamp() as usize;
+    let jti = generate_uuid();
 
     Claims {
         sub: user.id.to_string(),
         exp: expiration,
         iat,
+        jti,
         user_id: user.id,
         username: user.username.clone(),
         role: user.role.clone(),
@@ -142,7 +145,7 @@ pub async fn validate_token(token: &str) -> Result<TokenData<Claims>, AppError> 
     Ok(token_data)
 }
 
-pub fn generate_refresh_token() -> String {
+pub fn generate_uuid() -> String {
     Uuid::new_v4().to_string()
 }
 

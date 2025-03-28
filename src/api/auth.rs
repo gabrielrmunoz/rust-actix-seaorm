@@ -5,7 +5,7 @@ use sea_orm::DbConn;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::auth::jwt::{generate_claims, generate_refresh_token, generate_token_from_claims};
+use crate::auth::jwt::{generate_claims, generate_uuid, generate_token_from_claims};
 use crate::auth::password::verify_password;
 use crate::db::models::RefreshTokenActiveModel;
 use crate::db::repositories::{RefreshTokenRepository, UserRepository};
@@ -90,7 +90,7 @@ async fn create_new_refresh_token(
     user: &crate::db::models::UserModel,
 ) -> Result<String, AppError> {
     let claims = generate_claims(user);
-    let refresh_token = generate_refresh_token();
+    let refresh_token = generate_uuid();
 
     let created_on = DateTime::<Utc>::from_timestamp(claims.iat as i64, 0)
         .unwrap()
