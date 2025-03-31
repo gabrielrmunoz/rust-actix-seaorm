@@ -1,4 +1,5 @@
-use actix_web::{HttpRequest, HttpResponse, web};
+use actix_web::error::{ErrorForbidden, ErrorInternalServerError, ErrorUnauthorized};
+use actix_web::{Error, HttpRequest, HttpResponse, web};
 use chrono::{DateTime, Utc};
 use redis::aio::MultiplexedConnection;
 use sea_orm::ActiveValue::Set;
@@ -11,7 +12,7 @@ use crate::auth::password::verify_password;
 use crate::auth::{Claims, extract_claims_from_header};
 use crate::db::models::{RefreshTokenActiveModel, UserModel};
 use crate::db::repositories::{RefreshTokenRepository, UserRepository};
-use crate::error::AppError;
+
 use crate::redis::get_connection;
 use crate::redis::token_store::{
     get_user_sessions_count, register_token, revoke_all_user_tokens, revoke_token,
@@ -49,29 +50,31 @@ pub async fn refresh_token(
     db: &DbConn,
     redis_conn: &mut MultiplexedConnection,
     refresh_token_str: &str,
-) -> Result<(String, Claims), AppError> {
+) -> Result<(String, Claims), Error> {
     let refresh_token_repository = RefreshTokenRepository::new(db);
     let user_repository = UserRepository::new(db);
 
     // Find and validate refresh token
     let refresh_token_model = refresh_token_repository
         .find_by_refresh_token(refresh_token_str)
-        .await?
-        .ok_or_else(|| Err(ErrorUnauthorized("Invalid refresh token".into());
+        .await
+        .map_err(|_: sea_orm::DbErr| ErrorUnauthorized(String::from("Invalid refresh token")))?
+        .ok_or_else(|| ErrorUnauthorized(String::from("Refresh token not found")))?;
 
     let now = Utc::now().naive_utc();
     if refresh_token_model.revoked_on.is_some() || refresh_token_model.expires_on <= now {
-        return Err(ErrorUnauthorized("Refresh token expired or revoked".into()));
+        return Err(ErrorUnauthorized("Refresh token expired or revoked"));
     }
 
     // Get user information
     let user = user_repository
         .find_by_id(refresh_token_model.user_id)
-        .await?
-        .ok_or_else(|| Err(ErrorUnauthorized("User not found".into()))?;
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Database error: {}", e)))?
+        .ok_or_else(|| ErrorUnauthorized::<String>("User not found".to_string()))?;
 
     if user.deleted_on.is_some() {
-        return Err(ErrorUnauthorized("Account is disabled".into());
+        return Err(ErrorUnauthorized("Account is disabled"));
     }
 
     // Generate new JWT token
@@ -82,32 +85,33 @@ pub async fn refresh_token(
     // Register token in Redis
     if let Err(e) = register_token(redis_conn, user.id, &claims.jti, expires_in_secs).await {
         log::error!("Failed to register token in Redis: {}", e);
-        return Err(ErrorUnauthorized("Error registering token in Redis".into());
+        return Err(ErrorUnauthorized("Error registering token in Redis"));
     }
 
     return Ok((token, claims));
 }
 
-async fn login(
-    db: web::Data<DbConn>,
-    req: web::Json<LoginRequest>,
-) -> Result<HttpResponse, AppError> {
+async fn login(db: web::Data<DbConn>, req: web::Json<LoginRequest>) -> Result<HttpResponse, Error> {
     process_json_validation(&req)?;
 
     let user_repository = UserRepository::new(db.get_ref());
 
-    let user = match user_repository.find_by_username(&req.username).await? {
+    let user = match user_repository
+        .find_by_username(&req.username)
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Database error: {}", e)))?
+    {
         Some(user) => user,
-        None => return Err(ErrorUnauthorized("Account not registered".into()),
+        None => return Err(ErrorUnauthorized("Account not registered".to_string())),
     };
 
     let is_valid = verify_password(&req.password, &user.password)?;
     if !is_valid {
-        return Err(ErrorUnauthorized("Invalid credentials".into());
+        return Err(ErrorUnauthorized("Invalid credentials"));
     }
 
     if user.deleted_on.is_some() {
-        return Err(ErrorUnauthorized("Account is disabled".into());
+        return Err(ErrorUnauthorized("Account is disabled"));
     }
 
     let has_active_tokens = match get_connection().await {
@@ -132,15 +136,18 @@ async fn login(
     };
 
     if has_active_tokens {
-        return AppError::Forbidden(
-            "You already have an active session. Please logout from other devices first.".into(),
-        );
+        return Err(ErrorForbidden(
+            "You already have an active session. Please logout from other devices first.",
+        ));
     }
 
     let refresh_token_repository = RefreshTokenRepository::new(db.get_ref());
     let now = Utc::now().naive_utc();
 
-    let existing_refresh_token = refresh_token_repository.find_by_user_id(user.id).await?;
+    let existing_refresh_token = refresh_token_repository
+        .find_by_user_id(user.id)
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Database error: {}", e)))?;
 
     let refresh_token = if let Some(refresh_token_active_model) = existing_refresh_token {
         if refresh_token_active_model.revoked_on.is_none()
@@ -181,7 +188,7 @@ async fn login(
 async fn create_new_refresh_token(
     repository: &RefreshTokenRepository<'_>,
     user: &UserModel,
-) -> Result<String, AppError> {
+) -> Result<String, Error> {
     let claims = generate_claims(user);
     let refresh_token = generate_uuid();
 
@@ -203,7 +210,10 @@ async fn create_new_refresh_token(
         ..Default::default()
     };
 
-    repository.create(refresh_token_active_model).await?;
+    repository
+        .create(refresh_token_active_model)
+        .await
+        .map_err(|e| ErrorInternalServerError(format!("Database error: {}", e)))?;
 
     Ok(refresh_token)
 }
@@ -211,7 +221,7 @@ async fn create_new_refresh_token(
 async fn logout(
     req: HttpRequest,
     logout_req: web::Json<LogoutRequest>,
-) -> Result<HttpResponse, AppError> {
+) -> Result<HttpResponse, Error> {
     let claims = extract_claims_from_header(&req).await?;
 
     match get_connection().await {
@@ -219,18 +229,18 @@ async fn logout(
             if logout_req.revoke_all.unwrap_or(false) {
                 if let Err(e) = revoke_all_user_tokens(&mut conn, claims.user_id).await {
                     log::error!("Failed to revoke all tokens: {}", e);
-                    return Err(ErrorInternalServerError;
+                    return Err(ErrorInternalServerError("Failed to revoke all tokens"));
                 }
             } else {
                 if let Err(e) = revoke_token(&mut conn, &claims.jti).await {
                     log::error!("Failed to revoke token: {}", e);
-                    return Err(ErrorInternalServerError;
+                    return Err(ErrorInternalServerError("Failed to revoke token"));
                 }
             }
         }
         Err(e) => {
             log::error!("Failed to connect to Redis during logout: {}", e);
-            return Err(ErrorInternalServerError;
+            return Err(ErrorInternalServerError("Failed to connect to Redis"));
         }
     }
 

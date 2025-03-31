@@ -1,4 +1,6 @@
-use actix_web::HttpRequest;
+use actix_web::error::ErrorInternalServerError;
+use actix_web::error::ErrorUnauthorized;
+use actix_web::{Error, HttpRequest};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
 use once_cell::sync::Lazy;
@@ -8,7 +10,7 @@ use std::str::FromStr;
 use uuid::Uuid;
 
 use crate::db::models::UserModel;
-use crate::error::AppError;
+
 use crate::redis::get_connection;
 use crate::redis::token_store::is_token_valid;
 
@@ -110,7 +112,7 @@ pub fn generate_claims(user: &UserModel) -> Claims {
     }
 }
 
-pub fn generate_token_from_claims(claims: &Claims) -> Result<String, AppError> {
+pub fn generate_token_from_claims(claims: &Claims) -> Result<String, Error> {
     encode(
         &Header::default(),
         claims,
@@ -118,22 +120,24 @@ pub fn generate_token_from_claims(claims: &Claims) -> Result<String, AppError> {
     )
     .map_err(|e| {
         log::error!("Error generating token: {}", e);
-        Err(ErrorInternalServerError
+        ErrorInternalServerError(e)
     })
 }
 
-pub async fn extract_claims_from_header(req: &HttpRequest) -> Result<Claims, AppError> {
+pub async fn extract_claims_from_header(req: &HttpRequest) -> Result<Claims, Error> {
     let auth_header = req
         .headers()
         .get("Authorization")
-        .ok_or_else(|| Err(ErrorUnauthorized("Authorization header not found".into()))?;
+        .ok_or_else(|| ErrorUnauthorized::<String>("Authorization header not found".to_string()))?;
 
-    let auth_str = auth_header
-        .to_str()
-        .map_err(|_| Err(ErrorUnauthorized("Invalid authorization header format".into()))?;
+    let auth_str = auth_header.to_str().map_err(|_| {
+        ErrorUnauthorized::<String>("Invalid authorization header format".to_string())
+    })?;
 
     if !auth_str.starts_with("Bearer ") {
-        return Err(ErrorUnauthorized("Invalid authorization header format".into());
+        return Err(ErrorUnauthorized::<String>(
+            "Invalid authorization header format".to_string(),
+        ));
     }
 
     let token = auth_str.trim_start_matches("Bearer ").trim();
@@ -143,7 +147,7 @@ pub async fn extract_claims_from_header(req: &HttpRequest) -> Result<Claims, App
     Ok(token_data.claims)
 }
 
-pub async fn validate_token(token: &str) -> Result<TokenData<Claims>, AppError> {
+pub async fn validate_token(token: &str) -> Result<TokenData<Claims>, Error> {
     let token_data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(JWT_SECRET.as_bytes()),
@@ -151,12 +155,14 @@ pub async fn validate_token(token: &str) -> Result<TokenData<Claims>, AppError> 
     )
     .map_err(|e| {
         log::error!("JWT validation error: {}", e);
-        Err(ErrorUnauthorized("Invalid token".into())
+        ErrorUnauthorized::<String>("Invalid token".to_string())
     })?;
 
-    if !UserRole::is_valid_role(&token_data.claims.role.un) {
+    if !UserRole::is_valid_role(&token_data.claims.role) {
         log::error!("Token contains invalid role: {}", token_data.claims.role);
-        return Err(ErrorUnauthorized("Invalid role in token".into());
+        return Err(ErrorUnauthorized::<String>(
+            "Invalid role in token".to_string(),
+        ));
     }
 
     match get_connection().await {
@@ -164,7 +170,9 @@ pub async fn validate_token(token: &str) -> Result<TokenData<Claims>, AppError> 
             Ok(is_valid) => {
                 if !is_valid {
                     log::warn!("Token with ID {} has been revoked", token_data.claims.jti);
-                    return Err(ErrorUnauthorized("Token has been revoked".into());
+                    return Err(ErrorUnauthorized::<String>(
+                        "Token has been revoked".to_string(),
+                    ));
                 }
             }
             Err(e) => {

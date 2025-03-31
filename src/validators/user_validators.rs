@@ -1,10 +1,9 @@
-use actix_web::web;
+use actix_web::{Error, error::ErrorUnprocessableEntity, web};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use validator::{Validate, ValidationError, ValidationErrors};
 
 use crate::auth::UserRole;
-use crate::error::AppError;
 
 pub static PHONE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\+\d{1,3})?-\d{6,14}$").unwrap());
 
@@ -61,7 +60,7 @@ pub fn validate_role(role: &str) -> Result<(), ValidationError> {
     }
 }
 
-pub fn process_validation_errors<T: Validate>(item: &T) -> Result<(), AppError> {
+pub fn process_validation_errors<T: Validate>(item: &T) -> Result<(), Error> {
     if let Err(validation_errors) = item.validate() {
         let error_messages = format_validation_errors(validation_errors);
         return Err(ErrorUnprocessableEntity(error_messages));
@@ -69,7 +68,7 @@ pub fn process_validation_errors<T: Validate>(item: &T) -> Result<(), AppError> 
     Ok(())
 }
 
-pub fn process_json_validation<T: Validate>(json: &web::Json<T>) -> Result<(), AppError> {
+pub fn process_json_validation<T: Validate>(json: &web::Json<T>) -> Result<(), Error> {
     process_validation_errors(&json.0)
 }
 

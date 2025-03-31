@@ -119,14 +119,6 @@ Contains reusable validation logic:
 
 The validators provide a centralized location for all validation rules, ensuring consistency across the application and making it easier to update validation logic in one place.
 
-### Error Handling ([error](vscode-file://vscode-app/usr/share/code/resources/app/out/vs/code/electron-sandbox/workbench/workbench.html))
-
-Custom error types and error handling logic:
-
--   `AppError`: Custom error type with variants for different error categories
--   Conversion traits for mapping between different error types
--   Error responses formatting
-
 🛠️ Getting Started
 -------------------
 
