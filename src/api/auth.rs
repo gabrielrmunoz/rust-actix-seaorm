@@ -57,23 +57,21 @@ pub async fn refresh_token(
     let refresh_token_model = refresh_token_repository
         .find_by_refresh_token(refresh_token_str)
         .await?
-        .ok_or_else(|| AppError::Unauthorized("Invalid refresh token".into()))?;
+        .ok_or_else(|| Err(ErrorUnauthorized("Invalid refresh token".into());
 
     let now = Utc::now().naive_utc();
     if refresh_token_model.revoked_on.is_some() || refresh_token_model.expires_on <= now {
-        return Err(AppError::Unauthorized(
-            "Refresh token expired or revoked".into(),
-        ));
+        return Err(ErrorUnauthorized("Refresh token expired or revoked".into()));
     }
 
     // Get user information
     let user = user_repository
         .find_by_id(refresh_token_model.user_id)
         .await?
-        .ok_or_else(|| AppError::Unauthorized("User not found".into()))?;
+        .ok_or_else(|| Err(ErrorUnauthorized("User not found".into()))?;
 
     if user.deleted_on.is_some() {
-        return Err(AppError::Unauthorized("Account is disabled".into()));
+        return Err(ErrorUnauthorized("Account is disabled".into());
     }
 
     // Generate new JWT token
@@ -84,12 +82,10 @@ pub async fn refresh_token(
     // Register token in Redis
     if let Err(e) = register_token(redis_conn, user.id, &claims.jti, expires_in_secs).await {
         log::error!("Failed to register token in Redis: {}", e);
-        return Err(AppError::Unauthorized(
-            "Error registering token in Redis".into(),
-        ));
+        return Err(ErrorUnauthorized("Error registering token in Redis".into());
     }
 
-    Ok((token, claims))
+    return Ok((token, claims));
 }
 
 async fn login(
@@ -102,16 +98,16 @@ async fn login(
 
     let user = match user_repository.find_by_username(&req.username).await? {
         Some(user) => user,
-        None => return Err(AppError::Unauthorized("Account not registered".into())),
+        None => return Err(ErrorUnauthorized("Account not registered".into()),
     };
 
     let is_valid = verify_password(&req.password, &user.password)?;
     if !is_valid {
-        return Err(AppError::Unauthorized("Invalid credentials".into()));
+        return Err(ErrorUnauthorized("Invalid credentials".into());
     }
 
     if user.deleted_on.is_some() {
-        return Err(AppError::Unauthorized("Account is disabled".into()));
+        return Err(ErrorUnauthorized("Account is disabled".into());
     }
 
     let has_active_tokens = match get_connection().await {
@@ -136,9 +132,9 @@ async fn login(
     };
 
     if has_active_tokens {
-        return Err(AppError::Forbidden(
+        return AppError::Forbidden(
             "You already have an active session. Please logout from other devices first.".into(),
-        ));
+        );
     }
 
     let refresh_token_repository = RefreshTokenRepository::new(db.get_ref());
@@ -223,18 +219,18 @@ async fn logout(
             if logout_req.revoke_all.unwrap_or(false) {
                 if let Err(e) = revoke_all_user_tokens(&mut conn, claims.user_id).await {
                     log::error!("Failed to revoke all tokens: {}", e);
-                    return Err(AppError::InternalServerError);
+                    return Err(ErrorInternalServerError;
                 }
             } else {
                 if let Err(e) = revoke_token(&mut conn, &claims.jti).await {
                     log::error!("Failed to revoke token: {}", e);
-                    return Err(AppError::InternalServerError);
+                    return Err(ErrorInternalServerError;
                 }
             }
         }
         Err(e) => {
             log::error!("Failed to connect to Redis during logout: {}", e);
-            return Err(AppError::InternalServerError);
+            return Err(ErrorInternalServerError;
         }
     }
 

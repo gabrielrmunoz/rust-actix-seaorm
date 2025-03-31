@@ -118,7 +118,7 @@ pub fn generate_token_from_claims(claims: &Claims) -> Result<String, AppError> {
     )
     .map_err(|e| {
         log::error!("Error generating token: {}", e);
-        AppError::InternalServerError
+        Err(ErrorInternalServerError
     })
 }
 
@@ -126,16 +126,14 @@ pub async fn extract_claims_from_header(req: &HttpRequest) -> Result<Claims, App
     let auth_header = req
         .headers()
         .get("Authorization")
-        .ok_or_else(|| AppError::Unauthorized("Authorization header not found".into()))?;
+        .ok_or_else(|| Err(ErrorUnauthorized("Authorization header not found".into()))?;
 
     let auth_str = auth_header
         .to_str()
-        .map_err(|_| AppError::Unauthorized("Invalid authorization header format".into()))?;
+        .map_err(|_| Err(ErrorUnauthorized("Invalid authorization header format".into()))?;
 
     if !auth_str.starts_with("Bearer ") {
-        return Err(AppError::Unauthorized(
-            "Invalid authorization header format".into(),
-        ));
+        return Err(ErrorUnauthorized("Invalid authorization header format".into());
     }
 
     let token = auth_str.trim_start_matches("Bearer ").trim();
@@ -153,12 +151,12 @@ pub async fn validate_token(token: &str) -> Result<TokenData<Claims>, AppError> 
     )
     .map_err(|e| {
         log::error!("JWT validation error: {}", e);
-        AppError::Unauthorized("Invalid token".into())
+        Err(ErrorUnauthorized("Invalid token".into())
     })?;
 
-    if !UserRole::is_valid_role(&token_data.claims.role) {
+    if !UserRole::is_valid_role(&token_data.claims.role.un) {
         log::error!("Token contains invalid role: {}", token_data.claims.role);
-        return Err(AppError::Unauthorized("Invalid role in token".into()));
+        return Err(ErrorUnauthorized("Invalid role in token".into());
     }
 
     match get_connection().await {
@@ -166,7 +164,7 @@ pub async fn validate_token(token: &str) -> Result<TokenData<Claims>, AppError> 
             Ok(is_valid) => {
                 if !is_valid {
                     log::warn!("Token with ID {} has been revoked", token_data.claims.jti);
-                    return Err(AppError::Unauthorized("Token has been revoked".into()));
+                    return Err(ErrorUnauthorized("Token has been revoked".into());
                 }
             }
             Err(e) => {

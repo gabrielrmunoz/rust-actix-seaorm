@@ -112,10 +112,7 @@ pub async fn get_user(
 
     match user {
         Some(user) => Ok(HttpResponse::Ok().json(user)),
-        None => Err(AppError::NotFound(format!(
-            "User with ID {} not found",
-            user_id
-        ))),
+        None => AppError::NotFound(format!("User with ID {} not found", user_id)),
     }
 }
 
@@ -133,24 +130,15 @@ pub async fn create_user(
     let repo = UserRepository::new(db.get_ref());
 
     if let Some(_) = repo.find_by_username(&json_user.username).await? {
-        return Err(AppError::Validation(format!(
-            "Username {} already exists",
-            json_user.username
-        )));
+        return Err(ErrorUnprocessableEntity(format!("Username {} already exists", json_user.username));
     }
 
     if let Some(_) = repo.find_by_email(&json_user.email).await? {
-        return Err(AppError::Validation(format!(
-            "Email {} already exists",
-            json_user.email
-        )));
+        return Err(ErrorUnprocessableEntity(format!("Email {} already exists", json_user.email));
     }
 
     if let Some(_) = repo.find_by_phone(&json_user.phone).await? {
-        return Err(AppError::Validation(format!(
-            "Phone {} already exists",
-            json_user.phone
-        )));
+        return Err(ErrorUnprocessableEntity(format!("Phone {} already exists", json_user.phone));
     }
 
     let now = Local::now().naive_local();
@@ -192,30 +180,24 @@ pub async fn update_user(
 
     if let Some(ref username) = json_user.username {
         if username.trim().is_empty() {
-            return Err(AppError::Validation("Username cannot be empty".into()));
+            return Err(ErrorUnprocessableEntity("Username cannot be empty".into());
         }
 
         if let Some(existing_user) = repo.find_by_username(username).await? {
             if existing_user.id != user_id {
-                return Err(AppError::Validation(format!(
-                    "Username {} already exists",
-                    username
-                )));
+                return Err(ErrorUnprocessableEntity(format!("Username {} already exists", username));
             }
         }
     }
 
     if let Some(ref email) = json_user.email {
         if email.trim().is_empty() {
-            return Err(AppError::Validation("Email cannot be empty".into()));
+            return Err(ErrorUnprocessableEntity("Email cannot be empty".into());
         }
 
         if let Some(existing_user) = repo.find_by_email(email).await? {
             if existing_user.id != user_id {
-                return Err(AppError::Validation(format!(
-                    "Email {} already exists",
-                    email
-                )));
+                return Err(ErrorUnprocessableEntity(format!("Email {} already exists", email));
             }
         }
     }
@@ -254,10 +236,7 @@ pub async fn update_user(
             info!("User with ID {} updated", user_id);
             Ok(HttpResponse::Ok().json(updated_user))
         }
-        None => Err(AppError::NotFound(format!(
-            "User with ID {} not found",
-            user_id
-        ))),
+        None => AppError::NotFound(format!("User with ID {} not found", user_id)),
     }
 }
 
@@ -272,10 +251,7 @@ pub async fn delete_user_physical(
 
     let user = repo.find_by_id(user_id).await?;
     if user.is_none() {
-        return Err(AppError::NotFound(format!(
-            "User with ID {} not found",
-            user_id
-        )));
+        return AppError::NotFound(format!("User with ID {} not found", user_id));
     }
 
     let delete_result = repo.delete(user_id).await?;
@@ -285,7 +261,7 @@ pub async fn delete_user_physical(
         Ok(HttpResponse::NoContent().finish())
     } else {
         warn!("User with ID {} was not deleted (0 rows affected)", user_id);
-        Err(AppError::InternalServerError)
+        Err(ErrorInternalServerError
     }
 }
 
@@ -304,10 +280,10 @@ pub async fn delete_user_logical(
         Some(user) => {
             if user.deleted_on.is_some() {
                 warn!("User with ID {} is already logically deleted", user_id);
-                return Err(AppError::Validation(format!(
+                return Err(ErrorUnprocessableEntity(format!(
                     "User with ID {} is already marked as deleted",
                     user_id
-                )));
+                ));
             }
 
             let result = repo.soft_delete(user_id).await?;
@@ -316,13 +292,10 @@ pub async fn delete_user_logical(
                 info!("User with ID {} successfully marked as deleted", user_id);
                 Ok(HttpResponse::NoContent().finish())
             } else {
-                Err(AppError::InternalServerError)
+                Err(ErrorInternalServerError
             }
         }
-        None => Err(AppError::NotFound(format!(
-            "User with ID {} not found",
-            user_id
-        ))),
+        None => AppError::NotFound(format!("User with ID {} not found", user_id)),
     }
 }
 
@@ -344,10 +317,10 @@ pub async fn restore_user(
         Some(user) => {
             if user.deleted_on.is_none() {
                 warn!("User with ID {} is not deleted, cannot restore", user_id);
-                return Err(AppError::Validation(format!(
+                return Err(ErrorUnprocessableEntity(format!(
                     "User with ID {} is not marked as deleted",
                     user_id
-                )));
+                ));
             }
 
             let result = repo.restore(user_id).await?;
@@ -356,12 +329,9 @@ pub async fn restore_user(
                 info!("User with ID {} successfully restored", user_id);
                 Ok(HttpResponse::NoContent().finish())
             } else {
-                Err(AppError::InternalServerError)
+                Err(ErrorInternalServerError
             }
         }
-        None => Err(AppError::NotFound(format!(
-            "User with ID {} not found",
-            user_id
-        ))),
+        None => AppError::NotFound(format!("User with ID {} not found", user_id)),
     }
 }

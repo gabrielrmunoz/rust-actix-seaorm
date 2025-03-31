@@ -11,7 +11,7 @@ pub fn hash_password(password: &str) -> Result<String, AppError> {
         .hash_password(password.as_bytes(), &salt)
         .map_err(|e| {
             log::error!("Error hashing password: {}", e);
-            AppError::InternalServerError
+            Err(ErrorInternalServerError
         })?
         .to_string();
 
@@ -21,7 +21,7 @@ pub fn hash_password(password: &str) -> Result<String, AppError> {
 pub fn verify_password(password: &str, password_hash: &str) -> Result<bool, AppError> {
     let parsed_hash = PasswordHash::new(password_hash).map_err(|e| {
         log::error!("Error parsing hash: {}", e);
-        AppError::InternalServerError
+        Err(ErrorInternalServerError
     })?;
 
     Ok(Argon2::default()

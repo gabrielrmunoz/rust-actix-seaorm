@@ -64,7 +64,7 @@ pub fn validate_role(role: &str) -> Result<(), ValidationError> {
 pub fn process_validation_errors<T: Validate>(item: &T) -> Result<(), AppError> {
     if let Err(validation_errors) = item.validate() {
         let error_messages = format_validation_errors(validation_errors);
-        return Err(AppError::Validation(error_messages));
+        return Err(ErrorUnprocessableEntity(error_messages));
     }
     Ok(())
 }
