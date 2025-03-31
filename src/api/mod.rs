@@ -2,13 +2,13 @@ use actix_web::web::ServiceConfig;
 use actix_web::{HttpResponse, web};
 use sea_orm::DbConn;
 
-use crate::middleware::{JwtMiddleware, RoleGuard};
+use crate::middleware::{AuthMiddleware, RoleGuard};
 
 pub mod auth;
 mod users;
 
 pub fn configure_routes(cfg: &mut ServiceConfig, db: DbConn) {
-    let db_data = web::Data::new(db);
+    let db_data = web::Data::new(db.clone());
 
     cfg.app_data(db_data.clone())
         .route("/health", web::get().to(health_check))
@@ -17,11 +17,13 @@ pub fn configure_routes(cfg: &mut ServiceConfig, db: DbConn) {
                 .service(web::scope("/auth").configure(|c| auth::configure(c)))
                 .service(web::scope("/register").configure(|c| users::configure_public(c)))
                 .service(
-                    web::scope("").wrap(JwtMiddleware).service(
-                        web::scope("/users")
-                            .wrap(RoleGuard::user())
-                            .configure(|c| users::configure_protected(c)),
-                    ),
+                    web::scope("")
+                        .wrap(AuthMiddleware::new(db.clone()))
+                        .service(
+                            web::scope("/users")
+                                .wrap(RoleGuard::user())
+                                .configure(|c| users::configure_protected(c)),
+                        ),
                 ),
         );
 }

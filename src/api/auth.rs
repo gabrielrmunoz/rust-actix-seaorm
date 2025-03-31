@@ -1,5 +1,6 @@
 use actix_web::{HttpRequest, HttpResponse, web};
 use chrono::{DateTime, Utc};
+use redis::aio::MultiplexedConnection;
 use sea_orm::ActiveValue::Set;
 use sea_orm::DbConn;
 use serde::{Deserialize, Serialize};
@@ -46,6 +47,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
 
 pub async fn refresh_token(
     db: &DbConn,
+    redis_conn: &mut MultiplexedConnection,
     refresh_token_str: &str,
 ) -> Result<(String, Claims), AppError> {
     let refresh_token_repository = RefreshTokenRepository::new(db);
@@ -80,15 +82,11 @@ pub async fn refresh_token(
     let expires_in_secs = claims.exp.saturating_sub(claims.iat);
 
     // Register token in Redis
-    match get_connection().await {
-        Ok(mut conn) => {
-            if let Err(e) = register_token(&mut conn, user.id, &claims.jti, expires_in_secs).await {
-                log::error!("Failed to register refreshed token in Redis: {}", e);
-            }
-        }
-        Err(e) => {
-            log::error!("Failed to connect to Redis during token refresh: {}", e);
-        }
+    if let Err(e) = register_token(redis_conn, user.id, &claims.jti, expires_in_secs).await {
+        log::error!("Failed to register token in Redis: {}", e);
+        return Err(AppError::Unauthorized(
+            "Error registering token in Redis".into(),
+        ));
     }
 
     Ok((token, claims))
