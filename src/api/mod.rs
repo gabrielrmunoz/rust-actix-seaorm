@@ -17,13 +17,10 @@ pub fn configure_routes(cfg: &mut ServiceConfig, db: DbConn) {
                 .service(web::scope("/auth").configure(|c| auth::configure(c)))
                 .service(web::scope("/register").configure(|c| users::configure_public(c)))
                 .service(
-                    web::scope("")
+                    web::scope("/users")
+                        .wrap(RoleGuard::admin())
                         .wrap(AuthMiddleware::new(db.clone()))
-                        .service(
-                            web::scope("/users")
-                                .wrap(RoleGuard::user())
-                                .configure(|c| users::configure_protected(c)),
-                        ),
+                        .configure(|c| users::configure_protected(c)),
                 ),
         );
 }

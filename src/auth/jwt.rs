@@ -92,7 +92,7 @@ pub static JWT_SECRET: Lazy<String> = Lazy::new(|| {
 
 pub fn generate_claims(user: &UserModel) -> Claims {
     let expiration = Utc::now()
-        .checked_add_signed(Duration::minutes(15))
+        .checked_add_signed(Duration::minutes(1))
         .expect("valid timestamp")
         .timestamp() as usize;
 

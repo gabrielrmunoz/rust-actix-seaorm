@@ -80,12 +80,11 @@ where
         let required_role = self.role.clone();
 
         Box::pin(async move {
+            println!("Required role: {}", required_role.as_str());
+            println!("XXXXXXX {:?}", req.extensions().get::<Claims>());
             let has_permission = if let Some(claims) = req.extensions().get::<Claims>() {
                 let user_role_str = claims.role.to_lowercase();
                 user_role_str == required_role.as_str()
-                    || (required_role == UserRole::User && user_role_str == "admin")
-                    || (required_role == UserRole::Guest
-                        && (user_role_str == "admin" || user_role_str == "user"))
             } else {
                 return Err(ErrorUnauthorized("User not authenticated"));
             };

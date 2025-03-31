@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::api::auth;
-use crate::auth::jwt::{Claims, JWT_SECRET, UserRole, validate_token};
+use crate::auth::jwt::{Claims, JWT_SECRET, validate_token};
 use crate::db::repositories::RefreshTokenRepository;
 use crate::redis::get_connection;
 use crate::redis::token_store::user_exists;
@@ -65,15 +65,6 @@ where
     }
 
     fn call(&self, mut req: ServiceRequest) -> Self::Future {
-        // Public routes that do not require authentication
-        if req.path() == "/api/auth/login"
-            || req.path() == "/api/auth/register"
-            || req.path() == "/api/auth/refresh"
-            || req.path() == "/health"
-        {
-            return Box::pin(self.service.call(req));
-        }
-
         // Check if the authorization header exists
         let auth_header = match req.headers().get("Authorization") {
             Some(header) => header,
@@ -302,30 +293,5 @@ fn extract_user_id_from_token(token: &str) -> Option<i32> {
             log::error!("Failed to decode token: {:?}", e);
             None
         }
-    }
-}
-
-// Role verification functions
-pub fn has_role(req: &ServiceRequest, required_role: UserRole) -> Result<bool, Error> {
-    if let Some(claims) = req.extensions().get::<Claims>() {
-        Ok(claims.role.to_lowercase() == required_role.as_str())
-    } else {
-        Err(ErrorUnauthorized("User not authenticated"))
-    }
-}
-
-pub fn require_admin(req: &ServiceRequest) -> Result<bool, Error> {
-    if let Some(claims) = req.extensions().get::<Claims>() {
-        Ok(claims.is_admin())
-    } else {
-        Err(ErrorUnauthorized("User not authenticated"))
-    }
-}
-
-pub fn require_user(req: &ServiceRequest) -> Result<bool, Error> {
-    if let Some(claims) = req.extensions().get::<Claims>() {
-        Ok(claims.is_user_or_above())
-    } else {
-        Err(ErrorUnauthorized("User not authenticated"))
     }
 }

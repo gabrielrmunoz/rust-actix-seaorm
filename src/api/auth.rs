@@ -118,7 +118,7 @@ async fn login(
         Ok(mut conn) => match get_user_sessions_count(&mut conn, user.id).await {
             Ok(count) => {
                 if count > 0 {
-                    log::warn!("User {} already has {} active sessions", user.id, count);
+                    log::warn!("User already has active sessions");
                     true
                 } else {
                     false
