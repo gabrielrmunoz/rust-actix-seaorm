@@ -7,9 +7,12 @@ use sea_orm::DbConn;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::auth::jwt::{generate_claims, generate_token_from_claims, generate_uuid};
+use crate::auth::Claims;
+use crate::auth::jwt::{
+    extract_claims_without_exp_validation, generate_claims, generate_token_from_claims,
+    generate_uuid,
+};
 use crate::auth::password::verify_password;
-use crate::auth::{Claims, extract_claims_from_header};
 use crate::db::models::{RefreshTokenActiveModel, UserModel};
 use crate::db::repositories::{RefreshTokenRepository, UserRepository};
 
@@ -222,29 +225,58 @@ async fn logout(
     req: HttpRequest,
     logout_req: web::Json<LogoutRequest>,
 ) -> Result<HttpResponse, Error> {
-    let claims = extract_claims_from_header(&req).await?;
+    let claims = match extract_claims_without_exp_validation(&req).await {
+        Ok(claims) => claims,
+        Err(e) => {
+            log::warn!(
+                "Failed to extract claims during logout: {}. Continuing anyway.",
+                e
+            );
 
-    match get_connection().await {
+            return Ok(HttpResponse::Ok().json(serde_json::json!({
+                "message": "Session terminated (token was already invalid)"
+            })));
+        }
+    };
+
+    let success = match get_connection().await {
         Ok(mut conn) => {
             if logout_req.revoke_all.unwrap_or(false) {
-                if let Err(e) = revoke_all_user_tokens(&mut conn, claims.user_id).await {
-                    log::error!("Failed to revoke all tokens: {}", e);
-                    return Err(ErrorInternalServerError("Failed to revoke all tokens"));
+                match revoke_all_user_tokens(&mut conn, claims.user_id).await {
+                    Ok(_) => true,
+                    Err(e) => {
+                        log::error!("Failed to revoke all tokens: {}", e);
+                        false
+                    }
                 }
             } else {
-                if let Err(e) = revoke_token(&mut conn, &claims.jti).await {
-                    log::error!("Failed to revoke token: {}", e);
-                    return Err(ErrorInternalServerError("Failed to revoke token"));
+                match revoke_token(&mut conn, &claims.jti).await {
+                    Ok(_) => true,
+                    Err(e) => {
+                        log::error!("Failed to revoke token: {}", e);
+
+                        if e.to_string().contains("not found") {
+                            true
+                        } else {
+                            false
+                        }
+                    }
                 }
             }
         }
         Err(e) => {
             log::error!("Failed to connect to Redis during logout: {}", e);
-            return Err(ErrorInternalServerError("Failed to connect to Redis"));
+            false
         }
-    }
+    };
 
-    Ok(HttpResponse::Ok().json(serde_json::json!({
-        "message": "Successfully logged out"
-    })))
+    if success {
+        Ok(HttpResponse::Ok().json(serde_json::json!({
+            "message": "Successfully logged out"
+        })))
+    } else {
+        Ok(HttpResponse::Ok().json(serde_json::json!({
+            "message": "Logged out (but there were some issues cleaning up session data)"
+        })))
+    }
 }

@@ -147,6 +147,40 @@ pub async fn extract_claims_from_header(req: &HttpRequest) -> Result<Claims, Err
     Ok(token_data.claims)
 }
 
+pub async fn extract_claims_without_exp_validation(req: &HttpRequest) -> Result<Claims, Error> {
+    let auth_header = req
+        .headers()
+        .get("Authorization")
+        .ok_or_else(|| ErrorUnauthorized::<String>("Authorization header not found".to_string()))?;
+
+    let auth_str = auth_header.to_str().map_err(|_| {
+        ErrorUnauthorized::<String>("Invalid authorization header format".to_string())
+    })?;
+
+    if !auth_str.starts_with("Bearer ") {
+        return Err(ErrorUnauthorized::<String>(
+            "Invalid authorization header format".to_string(),
+        ));
+    }
+
+    let token = auth_str.trim_start_matches("Bearer ").trim();
+
+    let mut validation = Validation::default();
+    validation.validate_exp = false;
+
+    let token_data = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(JWT_SECRET.as_bytes()),
+        &validation,
+    )
+    .map_err(|e| {
+        log::error!("JWT decode error (without exp validation): {}", e);
+        ErrorUnauthorized::<String>("Invalid token format".to_string())
+    })?;
+
+    Ok(token_data.claims)
+}
+
 pub async fn validate_token(token: &str) -> Result<TokenData<Claims>, Error> {
     let token_data = decode::<Claims>(
         token,
