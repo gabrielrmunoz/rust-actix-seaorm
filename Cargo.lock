@@ -2183,6 +2183,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_core"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c8d0fd677905edcbeedbf2edb6494d676f0e98d54d5cf9bda0b061cb8fb8aba"
+
+[[package]]
 name = "redis"
 version = "0.32.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2335,7 +2341,7 @@ dependencies = [
  "log",
  "once_cell",
  "password-hash",
- "rand_core 0.9.5",
+ "rand_core 0.10.0",
  "redis",
  "regex",
  "sea-orm",
