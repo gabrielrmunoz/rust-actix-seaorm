@@ -18,7 +18,7 @@ log = "0.4.29"
 once_cell = "1.21.3"
 password-hash = "0.5.0"
 rand_core = { version = "0.10.0" }
-redis = { version = "0.32.7", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "1.0.3", features = ["tokio-comp", "connection-manager"] }
 regex = "1.12.3"
 sea-orm = { version = "1.1.19", features = [
   "sqlx-postgres",

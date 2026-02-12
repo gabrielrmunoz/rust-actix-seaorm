@@ -7,7 +7,7 @@ pub mod token_store;
 
 static REDIS_CLIENT: Lazy<Option<Client>> = Lazy::new(|| {
     let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
-    
+
     match Client::open(redis_url.clone()) {
         Ok(client) => {
             log::info!("Redis client created at {}", redis_url);
@@ -28,7 +28,7 @@ pub async fn get_connection() -> Result<MultiplexedConnection, RedisError> {
     match REDIS_CLIENT.as_ref() {
         Some(client) => client.get_multiplexed_async_connection().await,
         None => Err(RedisError::from((
-            redis::ErrorKind::IoError,
+            redis::ErrorKind::Io,
             "Redis client not initialized",
         )))
     }
